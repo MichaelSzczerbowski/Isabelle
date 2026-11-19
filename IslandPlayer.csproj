@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>Isabelle</AssemblyName>
+    <RootNamespace>IslandPlayer</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>icon.ico</ApplicationIcon>
+    <Product>Isabelle</Product>
+    <Version>1.2.0</Version>
+    <Description>Dynamic Island music player for Windows</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- klucz publiczny do sprawdzania podpisu aktualizacji (tworzy go build_installer.bat) -->
+    <EmbeddedResource Include="keys\public.xml" LogicalName="public.xml" Condition="Exists('keys\public.xml')" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
+  </ItemGroup>
+
+</Project>
