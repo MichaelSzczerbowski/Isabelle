@@ -90,7 +90,41 @@ namespace IslandPlayer
         }
 
         /// <summary>Pobiera instalator, uruchamia go po cichu i zamyka program (instalator włączy nową wersję).</summary>
-        public static async Task InstallAsync(UpdateInfo info)
+        /// <summary>Do pobierania instalatora (~75 MB): długi limit czasu, żeby działało też na wolnym internecie.</summary>
+        private static readonly HttpClient Download = CreateDownloadClient();
+
+        private static HttpClient CreateDownloadClient()
+        {
+            var c = new HttpClient { Timeout = TimeSpan.FromMinutes(30) };
+            c.DefaultRequestHeaders.UserAgent.ParseAdd("Isabelle/" + Current.ToString(3));
+            return c;
+        }
+
+        /// <summary>Pobiera plik z postępem 0..1.</summary>
+        private static async Task<byte[]> DownloadAsync(string url, Action<double> progress)
+        {
+            using (var resp = await Download.GetAsync(url, HttpCompletionOption.ResponseHeadersRead))
+            {
+                resp.EnsureSuccessStatusCode();
+                long total = resp.Content.Headers.ContentLength ?? 0;
+                using (var src = await resp.Content.ReadAsStreamAsync())
+                using (var ms = new MemoryStream(total > 0 ? (int)total : 1 << 20))
+                {
+                    var buf = new byte[1 << 16];
+                    int n;
+                    long done = 0;
+                    while ((n = await src.ReadAsync(buf, 0, buf.Length)) > 0)
+                    {
+                        ms.Write(buf, 0, n);
+                        done += n;
+                        if (total > 0) progress?.Invoke((double)done / total);
+                    }
+                    return ms.ToArray();
+                }
+            }
+        }
+
+        public static async Task InstallAsync(UpdateInfo info, Action<double> progress = null)
         {
             if (info == null) return;
             if (string.IsNullOrEmpty(info.InstallerUrl))
@@ -100,7 +134,7 @@ namespace IslandPlayer
             }
             try
             {
-                byte[] data = await Http.GetByteArrayAsync(info.InstallerUrl);
+                byte[] data = await DownloadAsync(info.InstallerUrl, progress);
 
                 // instalujemy tylko plik podpisany kluczem autora - podróbka (nawet z przejętego konta) zostanie odrzucona
                 if (!await VerifyAsync(data, info))

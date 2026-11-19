@@ -443,7 +443,8 @@ namespace IslandPlayer
                     if (UpdateService.Available != null)
                     {
                         btnText.Text = L.T("Pobieranie…", "Downloading…");
-                        await UpdateService.InstallAsync(UpdateService.Available);
+                        await UpdateService.InstallAsync(UpdateService.Available,
+                            p => Dispatcher.BeginInvoke(new Action(() => btnText.Text = L.T("Pobieranie… ", "Downloading… ") + (int)(p * 100) + "%")));
                     }
                     else
                     {
