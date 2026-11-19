@@ -1,0 +1,13 @@
+bin/
+obj/
+publish/
+.vs/
+*.user
+build_log.txt
+publish_log.txt
+installer/
+installer_log.txt
+
+# klucz do podpisywania aktualizacji - NIGDY nie wrzucaj go na GitHuba
+keys/
+*.sig

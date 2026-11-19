@@ -132,6 +132,9 @@
                             </Border.Background>
                         </Border>
                     </Grid>
+                    <TextBlock x:Name="CompactTitleText" FontSize="12" FontWeight="SemiBold" Foreground="White" Visibility="Collapsed"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                               Margin="36,0,38,1" />
                     <local:BarsControl x:Name="CompactBars" Width="17" Height="14" HorizontalAlignment="Right" Margin="0,0,12,0" />
                 </Grid>
 

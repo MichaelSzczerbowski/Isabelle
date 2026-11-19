@@ -21,6 +21,24 @@ namespace IslandPlayer
         public struct POINT { public int X, Y; }
 
         [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT p);
+        [DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(POINT p);
+        [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
+
+        /// <summary>Czy w danym punkcie ekranu (piksele) widać nasze okno, czy coś je zasłania.</summary>
+        public static bool IsOnTopAt(IntPtr own, int x, int y)
+        {
+            IntPtr h = WindowFromPoint(new POINT { X = x, Y = y });
+            if (h == IntPtr.Zero) return true;
+            return GetAncestor(h, 2) == own; // GA_ROOT
+        }
+
+        /// <summary>Wyciąga okno ponad inne okna "zawsze na wierzchu" (np. film albo gra w oknie pełnoekranowym).</summary>
+        public static void ForceTopmost(IntPtr hwnd)
+        {
+            const uint flags = 0x0001 | 0x0002 | 0x0010; // NOSIZE | NOMOVE | NOACTIVATE
+            SetWindowPos(hwnd, new IntPtr(-2), 0, 0, 0, 0, flags);          // HWND_NOTOPMOST
+            SetWindowPos(hwnd, new IntPtr(-1), 0, 0, 0, 0, flags | 0x0040); // HWND_TOPMOST | SHOWWINDOW
+        }
 
         [StructLayout(LayoutKind.Sequential)]
         public struct MONITORINFO

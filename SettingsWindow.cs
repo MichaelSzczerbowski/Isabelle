@@ -282,6 +282,9 @@ namespace IslandPlayer
             var g = Group(p, null);
             Toggle(g, L.T("Tekst piosenki", "Lyrics"), L.T("zsynchronizowany z muzyką, z serwisu LRCLIB", "synced with the music, from LRCLIB"),
                 c.Lyrics, v => c.Lyrics = v);
+            Toggle(g, L.T("Tytuł w małej wyspie", "Title in the small island"),
+                L.T("nazwa piosenki na środku, między okładką a słupkami", "song title in the middle, between the cover and the bars"),
+                c.CompactTitle, v => c.CompactTitle = v);
             Toggle(g, L.T("Powiadomienie o utworze", "Track notification"), L.T("nowy utwór pokazuje się na kilka sekund", "a new track shows up for a few seconds"),
                 c.TrackToast, v => c.TrackToast = v);
             Toggle(g, L.T("Tryb kropki", "Dot mode"), L.T("zawsze mała kropka – odtwarzacz otwiera się po kliknięciu", "always a tiny dot – the player opens on click"),
@@ -312,6 +315,9 @@ namespace IslandPlayer
             Segment(g2, L.T("Położenie", "Position"), L.T("możesz też po prostu przeciągnąć wyspę myszką", "you can also just drag the island with the mouse"),
                 new[] { ("top", L.T("Góra", "Top")), ("bottom", L.T("Dół", "Bottom")), ("left", L.T("Lewo", "Left")), ("right", L.T("Prawo", "Right")) },
                 c.Edge, v => { c.Edge = v; c.CustomPosition = false; });
+            Segment(g2, L.T("Róg ekranu", "Screen corner"), null,
+                new[] { ("topleft", "↖"), ("topright", "↗"), ("bottomleft", "↙"), ("bottomright", "↘") },
+                c.Edge, v => { c.Edge = v; c.CustomPosition = false; });
             Segment(g2, L.T("Rozmiar", "Size"), null,
                 new[] { ("0.9", "90%"), ("1", "100%"), ("1.15", "115%"), ("1.3", "130%") },
                 ScaleKey(c.Scale), v => c.Scale = double.Parse(v, CultureInfo.InvariantCulture));
@@ -325,6 +331,9 @@ namespace IslandPlayer
             var g = Group(p, null);
             Toggle(g, L.T("Głośność kółkiem myszy", "Mouse wheel volume"), L.T("przewiń nad wyspą", "scroll over the island"),
                 c.WheelVolume, v => c.WheelVolume = v);
+            Toggle(g, L.T("Tylko głośność muzyki", "Music volume only"),
+                L.T("kółko zmienia głośność odtwarzacza (np. Spotify), a nie całego komputera", "the wheel changes the player's volume (e.g. Spotify), not the whole PC"),
+                c.AppVolume, v => c.AppVolume = v);
             Toggle(g, L.T("Głośność w wyspie", "Volume in the island"), L.T("zamiast systemowego okienka Windows", "instead of the Windows volume popup"),
                 c.VolumeOsd, v => c.VolumeOsd = v);
             Toggle(g, L.T("Płynna pauza", "Smooth pause"), L.T("muzyka cichnie, zamiast urywać się", "music fades out instead of stopping abruptly"),

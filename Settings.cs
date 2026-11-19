@@ -16,6 +16,8 @@ namespace IslandPlayer
         public bool AnimatedBackground { get; set; } = true;
         public bool Glow { get; set; } = true;
         public bool TrackToast { get; set; } = true;
+        /// <summary>Tytuł piosenki na środku małej wyspy.</summary>
+        public bool CompactTitle { get; set; }
         /// <summary>Zawsze mała kropka; pełny odtwarzacz dopiero po kliknięciu.</summary>
         public bool DotMode { get; set; }
         /// <summary>off / breathe / beat / strong</summary>
@@ -25,6 +27,8 @@ namespace IslandPlayer
 
         // dźwięk
         public bool WheelVolume { get; set; } = true;
+        /// <summary>Kółko zmienia głośność samego odtwarzacza (np. Spotify), a nie całego komputera.</summary>
+        public bool AppVolume { get; set; } = true;
         public bool VolumeOsd { get; set; } = true;
         public bool FadeOnPause { get; set; } = true;
 

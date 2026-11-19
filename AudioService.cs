@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Windows.Threading;
 using NAudio.CoreAudioApi;
@@ -21,7 +22,7 @@ namespace IslandPlayer
         private string _defaultId;
         private AudioEndpointVolume _vol;
         private readonly List<MMDevice> _meters = new List<MMDevice>();
-        private DateTime _lastRefresh = DateTime.MinValue;
+        private DateTime _lastRefresh = DateTime.MinValue, _lastMeters = DateTime.MinValue;
         private bool _fading;
 
         public AudioService(Dispatcher ui)
@@ -65,6 +66,9 @@ namespace IslandPlayer
                 DetachDefault();
             }
 
+            // lista wyjść (słuchawki, głośniki) odświeżana rzadko - to kosztowne wywołania systemowe
+            if (!force && (DateTime.UtcNow - _lastMeters).TotalSeconds < 15) return;
+            _lastMeters = DateTime.UtcNow;
             try
             {
                 foreach (var m in _meters)
@@ -116,25 +120,143 @@ namespace IslandPlayer
             return best;
         }
 
+        // ---------- głośność samego odtwarzacza (jak w mikserze głośności Windows) ----------
+        /// <summary>Identyfikator aplikacji, która gra (z multimediów Windows), np. "Spotify.exe".</summary>
+        public string TargetApp { get; set; }
+        private string _sessionsFor;
+        private DateTime _sessionsAt = DateTime.MinValue;
+        private readonly List<AudioSessionControl> _sessions = new List<AudioSessionControl>();
+
+        private bool UseApp => App.Config.AppVolume && !string.IsNullOrEmpty(TargetApp);
+
+        /// <summary>Możliwe nazwy procesu dla identyfikatora aplikacji (Spotify.exe, SpotifyAB.SpotifyMusic_...!Spotify, Chrome...).</summary>
+        private static List<string> Candidates(string appId)
+        {
+            var list = new List<string>();
+            string a = appId ?? "";
+            int bang = a.IndexOf('!');
+            if (bang >= 0)
+            {
+                list.Add(a.Substring(bang + 1));
+                string pkg = a.Substring(0, bang).Split('_')[0];
+                list.Add(pkg.Substring(pkg.LastIndexOf('.') + 1));
+            }
+            else
+            {
+                if (a.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) a = a.Substring(0, a.Length - 4);
+                a = a.Substring(Math.Max(a.LastIndexOf('\\'), 0)).TrimStart('\\');
+                list.Add(a);
+            }
+            list.RemoveAll(x => x.Length < 4);
+            return list;
+        }
+
+        private static bool Matches(string process, List<string> candidates)
+        {
+            foreach (var c in candidates)
+            {
+                if (process.Equals(c, StringComparison.OrdinalIgnoreCase)) return true;
+                if (process.Length >= 4 && c.IndexOf(process, StringComparison.OrdinalIgnoreCase) >= 0) return true;
+                if (process.IndexOf(c, StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            }
+            return false;
+        }
+
+        /// <summary>Sesje dźwięku odtwarzacza na domyślnym wyjściu (odświeżane co 2 s).</summary>
+        private List<AudioSessionControl> AppSessions()
+        {
+            if (_default == null) return _sessions;
+            if (_sessionsFor == TargetApp + _defaultId && (DateTime.UtcNow - _sessionsAt).TotalSeconds < 2) return _sessions;
+            _sessionsFor = TargetApp + _defaultId;
+            _sessionsAt = DateTime.UtcNow;
+            foreach (var s in _sessions)
+            {
+                try { s.Dispose(); } catch { }
+            }
+            _sessions.Clear();
+            try
+            {
+                var cands = Candidates(TargetApp);
+                if (cands.Count == 0) return _sessions;
+                var mgr = _default.AudioSessionManager;
+                mgr.RefreshSessions();
+                var all = mgr.Sessions;
+                for (int i = 0; i < all.Count; i++)
+                {
+                    var s = all[i];
+                    bool keep = false;
+                    try
+                    {
+                        if (!s.IsSystemSoundsSession)
+                        {
+                            using (var p = Process.GetProcessById((int)s.GetProcessID))
+                                keep = Matches(p.ProcessName, cands);
+                        }
+                    }
+                    catch { }
+                    if (keep) _sessions.Add(s);
+                    else
+                    {
+                        try { s.Dispose(); } catch { }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex);
+            }
+            return _sessions;
+        }
+
+        /// <summary>Głośność: samego odtwarzacza (gdy da się go znaleźć i opcja jest włączona) albo całego komputera.</summary>
         public float Volume
         {
             get
             {
-                try { return _vol?.MasterVolumeLevelScalar ?? 0; }
+                try
+                {
+                    if (UseApp)
+                    {
+                        var ss = AppSessions();
+                        if (ss.Count > 0)
+                        {
+                            float max = 0;
+                            foreach (var s in ss) max = Math.Max(max, s.SimpleAudioVolume.Mute ? 0 : s.SimpleAudioVolume.Volume);
+                            return max;
+                        }
+                    }
+                    return _vol?.MasterVolumeLevelScalar ?? 0;
+                }
                 catch { return 0; }
             }
             set
             {
                 try
                 {
-                    if (_vol == null) return;
                     float v = Math.Clamp(value, 0f, 1f);
+                    if (UseApp)
+                    {
+                        var ss = AppSessions();
+                        if (ss.Count > 0)
+                        {
+                            foreach (var s in ss)
+                            {
+                                s.SimpleAudioVolume.Volume = v;
+                                if (v > 0 && s.SimpleAudioVolume.Mute) s.SimpleAudioVolume.Mute = false;
+                            }
+                            return;
+                        }
+                    }
+                    if (_vol == null) return;
                     _vol.MasterVolumeLevelScalar = v;
                     if (v > 0 && _vol.Mute) _vol.Mute = false;
                 }
                 catch { }
             }
         }
+
+        /// <summary>Czy zmiana dotyczy samego odtwarzacza (do podpisu w wyspie).</summary>
+        public bool IsAppVolume => UseApp && AppSessions().Count > 0;
 
         public bool Muted
         {
@@ -157,7 +279,7 @@ namespace IslandPlayer
         public async Task FadeToggleAsync(bool playingNow, Action toggle)
         {
             float target = Volume;
-            if (_vol == null || target <= 0.01f || Muted)
+            if (target <= 0.01f || (!IsAppVolume && (_vol == null || Muted)))
             {
                 toggle();
                 return;
@@ -203,6 +325,11 @@ namespace IslandPlayer
 
         public void Dispose()
         {
+            foreach (var s in _sessions)
+            {
+                try { s.Dispose(); } catch { }
+            }
+            _sessions.Clear();
             DetachDefault();
             foreach (var m in _meters)
             {

@@ -79,6 +79,12 @@ namespace IslandPlayer
         {
             InitializeComponent();
 
+            // okno przycinane do samej wyspy, gdy nic się nie dzieje (mniej pracy dla procesora)
+            var root = Root;
+            Content = null;
+            _host.Children.Add(root);
+            Content = _host;
+
             _expandTimer.Tick += (s, e) => { _expandTimer.Stop(); _expanded = true; EnsureLoop(); };
             _collapseTimer.Tick += (s, e) => { _collapseTimer.Stop(); if (!_hover && !_dragging) { _expanded = false; EnsureLoop(); } };
             _slowTimer.Tick += (s, e) => SlowTick();
@@ -168,6 +174,9 @@ namespace IslandPlayer
             if (c.CoverAnimation == "off") ArtScale.ScaleX = ArtScale.ScaleY = 1;
             UpdateLyricsButton();
             ApplyTexts();
+            // tytuł w małej wyspie: szersza pigułka, napis na środku
+            CompactView.Width = c.CompactTitle ? 280 : 180;
+            CompactTitleText.Visibility = c.CompactTitle ? Visibility.Visible : Visibility.Collapsed;
             EnsureLoop();
         }
 
@@ -273,10 +282,12 @@ namespace IslandPlayer
             TitleText.Text = snap.Title;
             ArtistText.Text = snap.Artist;
             ToastTitle.Text = snap.Title;
+            CompactTitleText.Text = snap.Title;
             ToastArtist.Text = snap.Artist;
             ToastVTitle.Text = snap.Title;
             ToastVArtist.Text = snap.Artist;
             AppText.Text = MediaService.PrettyAppName(snap.AppId);
+            if (_audio != null) _audio.TargetApp = snap.AppId;
             AppBtn.Visibility = snap.Apps.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
             UpdatePlayIcon();
             UpdateLyricsButton();
@@ -646,7 +657,7 @@ namespace IslandPlayer
             if (ToastActive("vol")) return (240, 36);
             if (_expanded) return has ? (370, LyricsVisible ? 272 : 176) : (300, 96);
             if (has && ToastActive("track")) return (330, 76);
-            if (has) return (180, 32);
+            if (has) return (App.Config.CompactTitle ? 280 : 180, 32);
             switch (App.Config.IdleMode)
             {
                 case "hide": return (0, 0);
@@ -677,6 +688,8 @@ namespace IslandPlayer
         private void Frame()
         {
             double t = _clock.Elapsed.TotalSeconds;
+            // gdy wyspa stoi w miejscu (grają tylko słupki) wystarczy 30 klatek na sekundę
+            if (_lowFps && t - _lastFrame < 1.0 / 30) return;
             double dt = t - _lastFrame;
             _lastFrame = t;
             int steps = (int)Math.Round(dt * 60);
@@ -693,6 +706,8 @@ namespace IslandPlayer
             }
             bool settled = Math.Abs(tw - _w) < 0.3 && Math.Abs(th - _h) < 0.3 && Math.Abs(_vw) < 0.05 && Math.Abs(_vh) < 0.05;
             if (settled) { _w = tw; _h = th; _vw = _vh = 0; }
+            // coś się zmienia (najechanie, powiadomienie...) -> najpierw przywróć pełne okno
+            if (_crop != null && (tw != _cropTw || th != _cropTh || _expanded || _moving)) ApplyCrop(null, 0, 0);
             double w = Math.Max(0, _w), h = Math.Max(0, _h);
             double r = Math.Min(Math.Min(w, h) / 2, 38);
 
@@ -757,7 +772,8 @@ namespace IslandPlayer
             if (DotView.Opacity > 0)
             {
                 // kropka świeci kolorem okładki i pulsuje z muzyką; szara, gdy nic nie gra
-                DotLight.Fill = has && playing ? _accentBrush : (Brush)new SolidColorBrush(Color.FromRgb(0x5A, 0x5A, 0x64));
+                Brush dotFill = has && playing ? _accentBrush : DotIdle;
+                if (!ReferenceEquals(DotLight.Fill, dotFill)) DotLight.Fill = dotFill;
                 double ds = playing ? 1 + 0.38 * level + 0.06 * Math.Sin(t * 2.4) : 1;
                 DotScale.ScaleX += (ds - DotScale.ScaleX) * 0.45;
                 DotScale.ScaleY = DotScale.ScaleX;
@@ -766,8 +782,11 @@ namespace IslandPlayer
             if (expOp > 0) ExpBars.Update(t, playing, _peakS, _peakMax);
 
             // ---- poświata i cień ----
-            double glow = App.Config.Glow && has && playing ? (0.16 + 0.34 * expOp + 0.12 * level) : 0;
-            Glow.Opacity += (glow - Glow.Opacity) * 0.15 * steps;
+            // stała jasność poświaty: zmiana w każdej klatce zmuszała kartę graficzną do ponownego rozmywania
+            double glow = App.Config.Glow && has && playing ? (0.2 + 0.3 * expOp) : 0;
+            double go = Glow.Opacity + (glow - Glow.Opacity) * Math.Min(1, 0.15 * steps);
+            if (Math.Abs(go - glow) < 0.01) go = glow;
+            if (go != Glow.Opacity) Glow.Opacity = go;
             Shadow.Opacity = visible ? Math.Min(0.55, 0.2 + h / 500) : 0;
 
             // ---- pulsowanie okładki ----
@@ -816,6 +835,26 @@ namespace IslandPlayer
                           CompactVView.Opacity is > 0 and < 1 || ToastVView.Opacity is > 0 and < 1 ||
                           VolVView.Opacity is > 0 and < 1 || IdleVView.Opacity is > 0 and < 1 ||
                           DotView.Opacity is > 0 and < 1;
+            // ---- przycinanie okna do wyspy, gdy wszystko stoi ----
+            bool midFade = ExpandedView.Opacity is > 0 and < 1 || CompactView.Opacity is > 0 and < 1 ||
+                           ToastView.Opacity is > 0 and < 1 || VolView.Opacity is > 0 and < 1 ||
+                           IdleView.Opacity is > 0 and < 1 || IdleExpandedView.Opacity is > 0 and < 1 ||
+                           CompactVView.Opacity is > 0 and < 1 || ToastVView.Opacity is > 0 and < 1 ||
+                           VolVView.Opacity is > 0 and < 1 || IdleVView.Opacity is > 0 and < 1 ||
+                           DotView.Opacity is > 0 and < 1;
+            bool croppable = settled && !_expanded && !_dragging && !_moving && _toastKind == null && !midFade && !fading;
+            if (croppable)
+            {
+                if (_settledSince <= 0) _settledSince = t;
+                if (_crop == null && t - _settledSince > 0.35) ApplyCrop(PillRect(tw, th), tw, th);
+            }
+            else
+            {
+                _settledSince = 0;
+            }
+            _lowFps = croppable;
+            needed = needed || (croppable && _crop == null);
+
             if (!needed) StopLoop();
         }
 
@@ -883,6 +922,9 @@ namespace IslandPlayer
                 Pill.CaptureMouse();
                 SetAlign("top");
                 ApplyOrientation(false);
+                _crop = null;
+                System.Windows.Controls.Canvas.SetLeft(Root, 0);
+                System.Windows.Controls.Canvas.SetTop(Root, 0);
                 Width = 520 * Sc;
                 Height = 380 * Sc;
                 EnsureLoop();
@@ -916,6 +958,9 @@ namespace IslandPlayer
             double dTop = px.Y - wa.Top, dBottom = wa.Bottom - px.Y, dLeft = px.X - wa.Left, dRight = wa.Right - px.X;
             double min = Math.Min(Math.Min(dTop, dBottom), Math.Min(dLeft, dRight));
             string edge = min == dTop ? "top" : min == dBottom ? "bottom" : min == dLeft ? "left" : "right";
+            // blisko rogu -> przyklej w rogu
+            bool nearX = Math.Min(dLeft, dRight) < wa.Width * 0.2, nearY = Math.Min(dTop, dBottom) < wa.Height * 0.25;
+            if (nearX && nearY) edge = (dTop <= dBottom ? "top" : "bottom") + (dLeft <= dRight ? "left" : "right");
             var c = App.Config;
             c.Edge = edge;
             c.CustomPosition = true;
@@ -960,6 +1005,10 @@ namespace IslandPlayer
                         Left = wa.Left;
                         Top = Clamp(ay - H / 2, wa.Top, wa.Bottom - H);
                         break;
+                    case "topleft": Left = wa.Left; Top = wa.Top; break;
+                    case "topright": Left = wa.Right - W; Top = wa.Top; break;
+                    case "bottomleft": Left = wa.Left; Top = wa.Bottom - H; break;
+                    case "bottomright": Left = wa.Right - W; Top = wa.Bottom - H; break;
                     case "right":
                         Left = wa.Right - W;
                         Top = Clamp(ay - H / 2, wa.Top, wa.Bottom - H);
@@ -969,6 +1018,11 @@ namespace IslandPlayer
                         Top = wa.Top;
                         break;
                 }
+                _baseLeft = Left;
+                _baseTop = Top;
+                ApplyCrop(null, 0, 0);
+                _settledSince = 0;
+                EnsureLoop();
             }
             catch (Exception ex)
             {
@@ -977,6 +1031,56 @@ namespace IslandPlayer
         }
 
         private bool _vertical, _orientationSet;
+
+        // ---- przycinanie okna ----
+        private readonly System.Windows.Controls.Canvas _host = new System.Windows.Controls.Canvas();
+        private static readonly Brush DotIdle = MakeFrozen(Color.FromRgb(0x5A, 0x5A, 0x64));
+        private double _baseLeft, _baseTop, _cropTw, _cropTh, _settledSince;
+        private Rect? _crop;
+        private bool _lowFps;
+
+        private static Brush MakeFrozen(Color c)
+        {
+            var b = new SolidColorBrush(c);
+            b.Freeze();
+            return b;
+        }
+
+        /// <summary>Prostokąt wyspy (z cieniem i poświatą) we współrzędnych pełnego okna.</summary>
+        private Rect PillRect(double w, double h)
+        {
+            double rw = Root.Width, rh = Root.Height;
+            var m = Pill.Margin;
+            double x = Pill.HorizontalAlignment == HorizontalAlignment.Left ? m.Left
+                     : Pill.HorizontalAlignment == HorizontalAlignment.Right ? rw - m.Right - w
+                     : (rw - w) / 2;
+            double y = Pill.VerticalAlignment == VerticalAlignment.Top ? m.Top
+                     : Pill.VerticalAlignment == VerticalAlignment.Bottom ? rh - m.Bottom - h
+                     : (rh - h) / 2;
+            const double pad = 46; // rozmycie cienia i poświaty
+            double x0 = Math.Max(0, x - pad), y0 = Math.Max(0, y - pad);
+            double x1 = Math.Min(rw, x + w + pad), y1 = Math.Min(rh, y + h + pad);
+            return new Rect(x0, y0, Math.Max(1, x1 - x0), Math.Max(1, y1 - y0));
+        }
+
+        /// <summary>
+        /// Przezroczyste okno WPF jest kopiowane na ekran w całości w każdej klatce - im mniejsze, tym mniej pracy.
+        /// null = pełne okno (animacje), prostokąt = tylko wyspa (spoczynek).
+        /// </summary>
+        private void ApplyCrop(Rect? crop, double tw, double th)
+        {
+            _crop = crop;
+            _cropTw = tw;
+            _cropTh = th;
+            double sc = Sc;
+            Rect r = crop ?? new Rect(0, 0, Root.Width, Root.Height);
+            System.Windows.Controls.Canvas.SetLeft(Root, -r.X * sc);
+            System.Windows.Controls.Canvas.SetTop(Root, -r.Y * sc);
+            Left = _baseLeft + r.X * sc;
+            Top = _baseTop + r.Y * sc;
+            Width = r.Width * sc;
+            Height = r.Height * sc;
+        }
 
         /// <summary>Poziomy (góra/dół) albo pionowy (boki ekranu) układ odtwarzacza.</summary>
         private void ApplyOrientation(bool v)
@@ -1071,6 +1175,10 @@ namespace IslandPlayer
                 case "bottom": v = VerticalAlignment.Bottom; m = new Thickness(0, 0, 0, 8); sm = new Thickness(0, 0, 0, 2); break;
                 case "left": h = HorizontalAlignment.Left; v = VerticalAlignment.Center; m = new Thickness(8, 0, 0, 0); sm = new Thickness(8, 12, 0, 0); break;
                 case "right": h = HorizontalAlignment.Right; v = VerticalAlignment.Center; m = new Thickness(0, 0, 8, 0); sm = new Thickness(0, 12, 8, 0); break;
+                case "topleft": h = HorizontalAlignment.Left; m = new Thickness(8, 8, 0, 0); sm = new Thickness(8, 14, 0, 0); break;
+                case "topright": h = HorizontalAlignment.Right; m = new Thickness(0, 8, 8, 0); sm = new Thickness(0, 14, 8, 0); break;
+                case "bottomleft": h = HorizontalAlignment.Left; v = VerticalAlignment.Bottom; m = new Thickness(8, 0, 0, 8); sm = new Thickness(8, 0, 0, 2); break;
+                case "bottomright": h = HorizontalAlignment.Right; v = VerticalAlignment.Bottom; m = new Thickness(0, 0, 8, 8); sm = new Thickness(0, 0, 8, 2); break;
             }
             foreach (var b in new FrameworkElement[] { Pill, Glow, Shadow })
             {
@@ -1098,12 +1206,19 @@ namespace IslandPlayer
 
                 if (_slowTicks % 2 == 0 && _hwnd != IntPtr.Zero)
                 {
-                    bool fs = App.Config.HideInFullscreen && Native.IsForegroundFullscreen(_hwnd);
+                    bool fullscreen = Native.IsForegroundFullscreen(_hwnd);
+                    bool fs = App.Config.HideInFullscreen && fullscreen;
                     if (fs != _fsHidden)
                     {
                         _fsHidden = fs;
                         Root.Visibility = fs ? Visibility.Hidden : Visibility.Visible;
                         EnsureLoop();
+                    }
+                    // wyspa ma być widoczna nad filmem / grą na pełnym ekranie: jeśli coś ją zasłania, wyciągnij ją na wierzch
+                    if (fullscreen && !App.Config.HideInFullscreen && Pill.ActualWidth > 2 && Pill.IsVisible)
+                    {
+                        Point c = Pill.PointToScreen(new Point(Pill.ActualWidth / 2, Pill.ActualHeight / 2));
+                        if (!Native.IsOnTopAt(_hwnd, (int)c.X, (int)c.Y)) Native.ForceTopmost(_hwnd);
                     }
                 }
                 if (_slowTicks % 12 == 0 && _hwnd != IntPtr.Zero && !_fsHidden) Native.KeepTopmost(_hwnd);
