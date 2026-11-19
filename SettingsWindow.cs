@@ -68,6 +68,7 @@ namespace IslandPlayer
             {
                 ("Odtwarzacz", "Player", IconNote, PagePlayer),
                 ("Wygląd", "Appearance", IconSparkle, PageLook),
+                ("Personalizacja", "Customize", IconPalette, PageCustomize),
                 ("Dźwięk", "Sound", IconSound, PageSound),
                 ("System", "System", IconSliders, PageSystem),
                 ("Aktualizacje", "Updates", IconUpdate, PageUpdates),
@@ -332,6 +333,103 @@ namespace IslandPlayer
                 new[] { ("0.9", "90%"), ("1", "100%"), ("1.15", "115%"), ("1.3", "130%") },
                 ScaleKey(c.Scale), v => c.Scale = double.Parse(v, CultureInfo.InvariantCulture));
             return p;
+        }
+
+        private StackPanel PageCustomize()
+        {
+            var c = App.Config;
+            var p = new StackPanel();
+
+            var g = Group(p, L.T("KOLORY", "COLORS"));
+            ColorRow(g, L.T("Kolor akcentu", "Accent color"), L.T("słupki, poświata i napisy", "bars, glow and labels"), c.Accent, v => c.Accent = v);
+            Segment(g, L.T("Kolor słupków", "Bars color"), null,
+                new[] { ("accent", L.T("Akcent", "Accent")), ("white", L.T("Biały", "White")) },
+                c.BarsColor, v => c.BarsColor = v);
+            Toggle(g, L.T("Pasek postępu w kolorze akcentu", "Accent-colored progress bar"), null, c.AccentProgress, v => c.AccentProgress = v);
+
+            var g2 = Group(p, L.T("WYSPA", "ISLAND"));
+            Segment(g2, L.T("Styl wyspy", "Island style"), L.T("szkło lekko prześwituje", "glass is slightly see-through"),
+                new[] { ("black", L.T("Czarna", "Black")), ("graphite", L.T("Grafit", "Graphite")), ("glass", L.T("Szkło", "Glass")) },
+                c.IslandStyle, v => c.IslandStyle = v);
+            Segment(g2, L.T("Zaokrąglenie", "Corners"), null,
+                new[] { ("round", L.T("Okrągłe", "Round")), ("soft", L.T("Łagodne", "Soft")), ("square", L.T("Kanciaste", "Square")) },
+                c.Corners, v => c.Corners = v);
+            Segment(g2, L.T("Animacja muzyki", "Music animation"), null,
+                new[] { ("bars", L.T("Słupki", "Bars")), ("dots", L.T("Kropki", "Dots")), ("none", L.T("Brak", "None")) },
+                c.BarsStyle, v => c.BarsStyle = v);
+            Segment(g2, L.T("Szybkość animacji", "Animation speed"), L.T("jak szybko wyspa się rozwija", "how fast the island expands"),
+                new[] { ("calm", L.T("Spokojna", "Calm")), ("normal", L.T("Normalna", "Normal")), ("fast", L.T("Szybka", "Fast")) },
+                c.AnimSpeed, v => c.AnimSpeed = v);
+
+            var g3 = Group(p, L.T("TEKST PIOSENKI", "LYRICS"));
+            Segment(g3, L.T("Wielkość tekstu", "Text size"), null,
+                new[] { ("s", L.T("Mały", "Small")), ("m", L.T("Średni", "Medium")), ("l", L.T("Duży", "Large")) },
+                c.LyricsSize, v => c.LyricsSize = v);
+            return p;
+        }
+
+        /// <summary>Wybór koloru: kółka z kolorami + "Auto" (kolor z okładki).</summary>
+        private void ColorRow(StackPanel rows, string title, string sub, string current, Action<string> set)
+        {
+            var sp = new StackPanel { Margin = new Thickness(18, 13, 16, 14) };
+            sp.Children.Add(new TextBlock { Text = title, FontSize = 14, FontWeight = FontWeights.SemiBold });
+            if (!string.IsNullOrEmpty(sub))
+                sp.Children.Add(new TextBlock { Text = sub, FontSize = 12, Foreground = TextSub, Margin = new Thickness(0, 2, 0, 0) });
+            var row = new WrapPanel { Margin = new Thickness(0, 10, 0, 0) };
+            var options = new (string key, Color color)[]
+            {
+                ("cover", Colors.Transparent),
+                ("pink", Color.FromRgb(255, 92, 160)), ("purple", Color.FromRgb(160, 120, 255)), ("blue", Color.FromRgb(64, 156, 255)),
+                ("green", Color.FromRgb(30, 215, 96)), ("orange", Color.FromRgb(255, 159, 10)), ("red", Color.FromRgb(255, 69, 58)),
+                ("white", Color.FromRgb(235, 235, 240)),
+            };
+            var rings = new Border[options.Length];
+            string selected = current;
+            void Paint()
+            {
+                for (int i = 0; i < options.Length; i++)
+                    rings[i].BorderBrush = options[i].key == selected ? Brushes.White : Brushes.Transparent;
+            }
+            for (int i = 0; i < options.Length; i++)
+            {
+                string key = options[i].key;
+                UIElement inner;
+                if (key == "cover")
+                {
+                    // "Auto": kolor z okładki - pokazujemy okładkę albo tęczę
+                    var cover = App.Island?.CoverImage;
+                    inner = new Border
+                    {
+                        Width = 26, Height = 26, CornerRadius = new CornerRadius(13),
+                        Background = cover != null
+                            ? new ImageBrush(cover) { Stretch = Stretch.UniformToFill }
+                            : (Brush)new LinearGradientBrush(Color.FromRgb(255, 92, 160), Color.FromRgb(64, 156, 255), 45),
+                        Child = new TextBlock { Text = "A", FontSize = 11, FontWeight = FontWeights.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+                        ToolTip = L.T("Z okładki", "From cover"),
+                    };
+                }
+                else
+                {
+                    inner = new Ellipse { Width = 26, Height = 26, Fill = new SolidColorBrush(options[i].color) };
+                }
+                var ring = new Border
+                {
+                    Width = 34, Height = 34, CornerRadius = new CornerRadius(17), BorderThickness = new Thickness(2),
+                    Margin = new Thickness(0, 0, 6, 6), Cursor = Cursors.Hand, Child = inner, Background = Brushes.Transparent,
+                };
+                ring.MouseLeftButtonUp += (s, e) =>
+                {
+                    selected = key;
+                    Paint();
+                    set(key);
+                    Changed();
+                };
+                rings[i] = ring;
+                row.Children.Add(ring);
+            }
+            Paint();
+            sp.Children.Add(row);
+            AddRow(rows, sp);
         }
 
         private StackPanel PageSound()
@@ -859,6 +957,7 @@ namespace IslandPlayer
         private const string IconSliders = "M0,3 H16 V5 H0 Z M0,11 H16 V13 H0 Z M4,1 A3,3 0 1 1 4,7 A3,3 0 1 1 4,1 Z M12,9 A3,3 0 1 1 12,15 A3,3 0 1 1 12,9 Z";
         private const string IconUpdate = "M7,0 H9 V8 L12,5 L13.4,6.4 L8,11.8 L2.6,6.4 L4,5 L7,8 Z M0,13 H16 V15 H0 Z";
         private const string IconMove = "M8,0 L11,3 H9 V7 H13 V5 L16,8 L13,11 V9 H9 V13 H11 L8,16 L5,13 H7 V9 H3 V11 L0,8 L3,5 V7 H7 V3 H5 Z";
+        private const string IconPalette = "M5,0 A5,5 0 1 1 5,10 A5,5 0 1 1 5,0 Z M12,5 A4,4 0 1 1 12,13 A4,4 0 1 1 12,5 Z M4,11 A3.5,3.5 0 1 1 4,18 A3.5,3.5 0 1 1 4,11 Z";
         private const string IconClose = "M0,0 L10,10 M10,0 L0,10";
 
         /// <summary>Przełącznik jak w iOS, w kolorze okładki.</summary>

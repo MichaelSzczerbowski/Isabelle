@@ -16,7 +16,7 @@ namespace IslandPlayer
     public partial class IslandWindow : Window
     {
         // sprężyna (jak w iOS) - wartości dobrane w wersji Python
-        private const double Stiff = 0.11, Damp = 0.66;
+        private double Stiff = 0.11, Damp = 0.66;
 
         private readonly MediaService _media = new MediaService();
         private AudioService _audio;
@@ -175,6 +175,18 @@ namespace IslandPlayer
             if (c.CoverAnimation == "off") ArtScale.ScaleX = ArtScale.ScaleY = 1;
             UpdateLyricsButton();
             ApplyTexts();
+            // ---- personalizacja ----
+            switch (c.AnimSpeed)
+            {
+                case "calm": Stiff = 0.07; Damp = 0.72; break;
+                case "fast": Stiff = 0.17; Damp = 0.6; break;
+                default: Stiff = 0.11; Damp = 0.66; break;
+            }
+            Pill.Background = c.IslandStyle == "glass" ? new SolidColorBrush(Color.FromArgb(0xB8, 12, 12, 14))
+                            : c.IslandStyle == "graphite" ? new SolidColorBrush(Color.FromRgb(0x1C, 0x1C, 0x1F))
+                            : (Brush)Brushes.Black;
+            ApplyAccent();
+            if (_lyrics != null && _lyricsSizeBuilt != c.LyricsSize) BuildLyrics();
             // tytuł w małej wyspie: szersza pigułka, napis na środku
             CompactView.Width = c.CompactTitle ? 280 : 180;
             CompactTitleText.Visibility = c.CompactTitle ? Visibility.Visible : Visibility.Collapsed;
@@ -338,18 +350,51 @@ namespace IslandPlayer
             SetAccent(accent);
         }
 
+        private Color _coverAccent = Color.FromRgb(30, 215, 96);
+
+        /// <summary>Kolor z okładki - użyty, gdy w personalizacji wybrano "Z okładki".</summary>
         private void SetAccent(Color c)
         {
-            _accent = c;
-            _accentBrush = new SolidColorBrush(c);
+            _coverAccent = c;
+            ApplyAccent();
+        }
+
+        private static Color PresetAccent(string key, Color fallback)
+        {
+            switch (key)
+            {
+                case "pink": return Color.FromRgb(255, 92, 160);
+                case "green": return Color.FromRgb(30, 215, 96);
+                case "blue": return Color.FromRgb(64, 156, 255);
+                case "purple": return Color.FromRgb(160, 120, 255);
+                case "orange": return Color.FromRgb(255, 159, 10);
+                case "red": return Color.FromRgb(255, 69, 58);
+                case "white": return Color.FromRgb(235, 235, 240);
+                default: return fallback;
+            }
+        }
+
+        /// <summary>Kolor akcentu, słupki i pasek postępu wg personalizacji.</summary>
+        private void ApplyAccent()
+        {
+            var c = App.Config;
+            _accent = PresetAccent(c.Accent, _coverAccent);
+            _accentBrush = new SolidColorBrush(_accent);
             _accentBrush.Freeze();
             Glow.Background = _accentBrush;
             ToastLabel.Foreground = _accentBrush;
             ToastVLabel.Foreground = _accentBrush;
-            CompactVBars.Fill = _accentBrush;
-            CompactBars.Fill = _accentBrush;
-            ToastBars.Fill = _accentBrush;
-            ExpBars.Fill = _accentBrush;
+            Brush bars = c.BarsColor == "white" ? Brushes.White : _accentBrush;
+            foreach (var b in new[] { CompactBars, CompactVBars, ToastBars, ExpBars })
+            {
+                b.Fill = bars;
+                b.Mode = c.BarsStyle == "dots" ? "dots" : "bars";
+                b.Visibility = c.BarsStyle == "none" ? Visibility.Hidden : Visibility.Visible;
+            }
+            foreach (var child in LyricsStack.Children)
+                if (child is BarsControl lb) { lb.Fill = bars; lb.Mode = c.BarsStyle == "dots" ? "dots" : "bars"; }
+            TrackFill.Background = c.AccentProgress ? _accentBrush : Brushes.White;
+            Thumb.Fill = c.AccentProgress ? _accentBrush : Brushes.White;
         }
 
         private void ClearCover()
@@ -551,8 +596,11 @@ namespace IslandPlayer
             EnsureLoop();
         }
 
+        private string _lyricsSizeBuilt;
+
         private void BuildLyrics()
         {
+            _lyricsSizeBuilt = App.Config.LyricsSize;
             LyricsStack.Children.Clear();
             _lyricIdx = -2;
             LyricsShift.BeginAnimation(TranslateTransform.YProperty, null);
@@ -563,14 +611,19 @@ namespace IslandPlayer
                 FrameworkElement el;
                 if (line.Instrumental)
                 {
-                    el = new BarsControl { Width = 24, Height = 14, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 4, 0, 12) };
+                    el = new BarsControl
+                    {
+                        Width = 24, Height = 14, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 4, 0, 12),
+                        Fill = App.Config.BarsColor == "white" ? Brushes.White : _accentBrush,
+                        Mode = App.Config.BarsStyle == "dots" ? "dots" : "bars",
+                    };
                 }
                 else
                 {
                     el = new TextBlock
                     {
                         Text = line.Text,
-                        FontSize = 15.5,
+                        FontSize = App.Config.LyricsSize == "s" ? 13.5 : App.Config.LyricsSize == "l" ? 18 : 15.5,
                         FontWeight = FontWeights.Bold,
                         Foreground = Brushes.White,
                         TextWrapping = TextWrapping.Wrap,
@@ -721,7 +774,8 @@ namespace IslandPlayer
             // coś się zmienia (najechanie, powiadomienie...) -> najpierw przywróć pełne okno
             if (_crop != null && (tw != _cropTw || th != _cropTh || _expanded || _moving)) ApplyCrop(null, 0, 0);
             double w = Math.Max(0, _w), h = Math.Max(0, _h);
-            double r = Math.Min(Math.Min(w, h) / 2, 38);
+            double maxR = App.Config.Corners == "square" ? 10 : App.Config.Corners == "soft" ? 18 : 38;
+            double r = Math.Min(Math.Min(w, h) / 2, maxR);
 
             bool visible = w > 1 && h > 1 && !_fsHidden;
             Pill.Visibility = visible ? Visibility.Visible : Visibility.Hidden;

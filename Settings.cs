@@ -48,6 +48,24 @@ namespace IslandPlayer
         public bool CustomPosition { get; set; }
         public double AnchorX { get; set; }
         public double AnchorY { get; set; }
+        // ---- personalizacja ----
+        /// <summary>cover (z okładki) / pink / green / blue / purple / orange / red / white</summary>
+        public string Accent { get; set; } = "cover";
+        /// <summary>black / glass / graphite</summary>
+        public string IslandStyle { get; set; } = "black";
+        /// <summary>bars / dots / none</summary>
+        public string BarsStyle { get; set; } = "bars";
+        /// <summary>accent / white</summary>
+        public string BarsColor { get; set; } = "accent";
+        /// <summary>round / soft / square</summary>
+        public string Corners { get; set; } = "round";
+        /// <summary>s / m / l</summary>
+        public string LyricsSize { get; set; } = "m";
+        /// <summary>calm / normal / fast</summary>
+        public string AnimSpeed { get; set; } = "normal";
+        /// <summary>Pasek postępu w kolorze akcentu zamiast białego.</summary>
+        public bool AccentProgress { get; set; }
+
         /// <summary>auto / pl / en</summary>
         public string Language { get; set; } = "auto";
         public bool AutoUpdate { get; set; } = true;

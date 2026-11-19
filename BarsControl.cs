@@ -9,6 +9,19 @@ namespace IslandPlayer
     {
         private readonly double[] _amp = { 0.28, 0.28, 0.28, 0.28 };
         private Brush _fill = Brushes.White;
+        private string _mode = "bars";
+
+        /// <summary>bars (słupki) / dots (kropki)</summary>
+        public string Mode
+        {
+            get => _mode;
+            set
+            {
+                if (_mode == value) return;
+                _mode = value;
+                InvalidateVisual();
+            }
+        }
 
         public Brush Fill
         {
@@ -60,6 +73,17 @@ namespace IslandPlayer
             if (w <= 0 || h <= 0) return;
             double gap = w * 0.12;
             double bw = (w - gap * 3) / 4;
+            if (_mode == "dots")
+            {
+                // kropki, które "oddychają" z muzyką
+                for (int i = 0; i < 4; i++)
+                {
+                    double rad = bw / 2 * (0.7 + 0.9 * _amp[i]);
+                    rad = Math.Min(rad, Math.Min(h / 2, (bw + gap) / 2));
+                    dc.DrawEllipse(_fill, null, new Point(i * (bw + gap) + bw / 2, h / 2), rad, rad);
+                }
+                return;
+            }
             for (int i = 0; i < 4; i++)
             {
                 double bh = Math.Max(bw, h * _amp[i]);
