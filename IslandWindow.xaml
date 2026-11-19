@@ -132,9 +132,10 @@
                             </Border.Background>
                         </Border>
                     </Grid>
-                    <TextBlock x:Name="CompactTitleText" FontSize="12" FontWeight="SemiBold" Foreground="White" Visibility="Collapsed"
-                               HorizontalAlignment="Center" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                               Margin="36,0,38,1" />
+                    <Canvas x:Name="CompactTitleClip" ClipToBounds="True" Height="18" Margin="36,0,38,1" VerticalAlignment="Center"
+                            Visibility="Collapsed" IsHitTestVisible="False">
+                        <TextBlock x:Name="CompactTitleText" FontSize="12" FontWeight="SemiBold" Foreground="White" />
+                    </Canvas>
                     <local:BarsControl x:Name="CompactBars" Width="17" Height="14" HorizontalAlignment="Right" Margin="0,0,12,0" />
                 </Grid>
 
@@ -187,6 +188,15 @@
                             <ScaleTransform x:Name="DotScale" ScaleX="1" ScaleY="1" />
                         </Ellipse.RenderTransform>
                     </Ellipse>
+                </Grid>
+
+                <!-- animacja startowa: wyspa "wyskakuje" z logo -->
+                <Grid x:Name="StartupView" Opacity="0" IsHitTestVisible="False">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <local:BarsControl x:Name="StartupBars" Width="18" Height="16" Fill="#FF5CA0" />
+                        <TextBlock x:Name="StartupText" Text="Isabelle" FontSize="14" FontWeight="SemiBold" Foreground="White"
+                                   Margin="10,0,0,1" VerticalAlignment="Center" />
+                    </StackPanel>
                 </Grid>
 
                 <!-- ===== PIONOWO (lewa / prawa krawędź ekranu) ===== -->
@@ -275,8 +285,9 @@
                             </Border>
                         </Grid>
                         <StackPanel x:Name="InfoPanel" Grid.Column="1" Margin="12,0,8,0" VerticalAlignment="Center">
-                            <TextBlock x:Name="TitleText" FontSize="15" FontWeight="SemiBold" Foreground="White"
-                                       TextTrimming="CharacterEllipsis" />
+                            <Canvas x:Name="TitleClip" ClipToBounds="True" Height="22" IsHitTestVisible="False">
+                                <TextBlock x:Name="TitleText" FontSize="15" FontWeight="SemiBold" Foreground="White" />
+                            </Canvas>
                             <TextBlock x:Name="ArtistText" FontSize="12.5" Foreground="#B3FFFFFF"
                                        TextTrimming="CharacterEllipsis" Margin="0,1,0,0" />
                         </StackPanel>

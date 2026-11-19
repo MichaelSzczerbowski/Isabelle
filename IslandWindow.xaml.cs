@@ -118,6 +118,8 @@ namespace IslandPlayer
             SeekArea.MouseLeave += (s, e) => { if (!_dragging) Thumb.Opacity = 0; };
 
             PillInner.Clip = _clip;
+            TitleClip.SizeChanged += (s, e) => Marquee.Update(TitleClip, TitleText, false);
+            CompactTitleClip.SizeChanged += (s, e) => Marquee.Update(CompactTitleClip, CompactTitleText, true);
             BgCover.RenderTransformOrigin = BgCover2.RenderTransformOrigin = new Point(0.5, 0.5);
             var g1 = new TransformGroup();
             g1.Children.Add(_bgScale1);
@@ -142,8 +144,17 @@ namespace IslandPlayer
             RegisterHotkeys();
         }
 
+        private DateTime _startupUntil;
+        private bool Startup => DateTime.UtcNow < _startupUntil;
+
         private async void OnLoaded(object sender, RoutedEventArgs e)
         {
+            if (App.Config.StartupAnimation)
+            {
+                // wyspa wyrasta z niczego, pokazuje logo i chowa się do zwykłego rozmiaru
+                _startupUntil = DateTime.UtcNow.AddSeconds(1.9);
+                _w = _h = 0;
+            }
             ApplySettings();
             _audio = new AudioService(Dispatcher);
             _audio.VolumeChanged += (v, m) => ShowVolume(v, m);
@@ -189,7 +200,7 @@ namespace IslandPlayer
             if (_lyrics != null && _lyricsSizeBuilt != c.LyricsSize) BuildLyrics();
             // tytuł w małej wyspie: szersza pigułka, napis na środku
             CompactView.Width = c.CompactTitle ? 280 : 180;
-            CompactTitleText.Visibility = c.CompactTitle ? Visibility.Visible : Visibility.Collapsed;
+            CompactTitleClip.Visibility = c.CompactTitle ? Visibility.Visible : Visibility.Collapsed;
             EnsureLoop();
         }
 
@@ -303,10 +314,10 @@ namespace IslandPlayer
             if (_playingOverride.HasValue && (snap.Playing == _playingOverride.Value || DateTime.UtcNow > _playingOverrideUntil))
                 _playingOverride = null;
 
-            TitleText.Text = snap.Title;
+            Marquee.SetText(TitleClip, TitleText, snap.Title, false);
             ArtistText.Text = snap.Artist;
             ToastTitle.Text = snap.Title;
-            CompactTitleText.Text = snap.Title;
+            Marquee.SetText(CompactTitleClip, CompactTitleText, snap.Title, true);
             ToastArtist.Text = snap.Artist;
             ToastVTitle.Text = snap.Title;
             ToastVArtist.Text = snap.Artist;
@@ -705,6 +716,7 @@ namespace IslandPlayer
         private (double w, double h) Target()
         {
             bool has = _snap != null;
+            if (Startup) return _vertical ? (40, 120) : (176, 40);
             if (App.Config.DotMode && !_expanded && !ToastActive("vol")) return (30, 30);
             if (_vertical)
             {
@@ -790,16 +802,20 @@ namespace IslandPlayer
 
             // ---- widoki ----
             bool has = _snap != null;
-            bool vol = ToastActive("vol");
-            bool dot = App.Config.DotMode;
-            bool track = !vol && !_expanded && has && !dot && ToastActive("track");
+            bool st = Startup;
+            bool vol = !st && ToastActive("vol");
+            bool dot = !st && App.Config.DotMode;
+            bool track = !st && !vol && !_expanded && has && !dot && ToastActive("track");
             bool near = Math.Abs(tw - w) < 40 && Math.Abs(th - h) < 30;
-            double expOp = Fade(ExpandedView, !vol && _expanded && has ? 1 : 0, near, steps);
-            Fade(IdleExpandedView, !vol && _expanded && !has ? 1 : 0, near, steps);
+            double expOp = Fade(ExpandedView, !st && !vol && _expanded && has ? 1 : 0, near, steps);
+            Fade(IdleExpandedView, !st && !vol && _expanded && !has ? 1 : 0, near, steps);
             bool hz = !_vertical;
-            bool compact = !vol && !_expanded && !track && has && !dot;
-            bool idle = !vol && !_expanded && !has && !dot;
+            bool compact = !st && !vol && !_expanded && !track && has && !dot;
+            bool idle = !st && !vol && !_expanded && !has && !dot;
             Fade(DotView, dot && !vol && !_expanded ? 1 : 0, near, steps);
+            Fade(StartupView, st ? 1 : 0, near, steps);
+            StartupText.Visibility = hz ? Visibility.Visible : Visibility.Collapsed;
+            if (StartupView.Opacity > 0) StartupBars.Update(t, true, 0.6 + 0.4 * Math.Abs(Math.Sin(t * 2.3)), 1);
             Fade(ToastView, hz && track ? 1 : 0, near, steps);
             Fade(VolView, hz && vol ? 1 : 0, near, steps);
             Fade(CompactView, hz && compact ? 1 : 0, near, steps);
@@ -908,7 +924,7 @@ namespace IslandPlayer
                            CompactVView.Opacity is > 0 and < 1 || ToastVView.Opacity is > 0 and < 1 ||
                            VolVView.Opacity is > 0 and < 1 || IdleVView.Opacity is > 0 and < 1 ||
                            DotView.Opacity is > 0 and < 1;
-            bool croppable = settled && !_expanded && !_dragging && !_moving && _toastKind == null && !midFade && !fading;
+            bool croppable = !st && settled && !_expanded && !_dragging && !_moving && _toastKind == null && !midFade && !fading;
             if (croppable)
             {
                 if (_settledSince <= 0) _settledSince = t;
@@ -919,7 +935,7 @@ namespace IslandPlayer
                 _settledSince = 0;
             }
             _lowFps = croppable;
-            needed = needed || (croppable && _crop == null);
+            needed = needed || (croppable && _crop == null) || st || StartupView.Opacity > 0;
 
             if (!needed) StopLoop();
         }
@@ -1228,6 +1244,8 @@ namespace IslandPlayer
             }
             // tekst piosenki zawija się inaczej - ułóż go od nowa
             if (_lyrics != null) BuildLyrics();
+            TitleClip.Height = v ? 23 : 22;
+            Dispatcher.BeginInvoke(new Action(() => Marquee.Update(TitleClip, TitleText, false)), DispatcherPriority.Loaded);
             EnsureLoop();
         }
 

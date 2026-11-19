@@ -65,6 +65,8 @@ namespace IslandPlayer
         public string AnimSpeed { get; set; } = "normal";
         /// <summary>Pasek postępu w kolorze akcentu zamiast białego.</summary>
         public bool AccentProgress { get; set; }
+        /// <summary>Wyspa "wyskakuje" z logo przy uruchomieniu.</summary>
+        public bool StartupAnimation { get; set; } = true;
 
         /// <summary>auto / pl / en</summary>
         public string Language { get; set; } = "auto";

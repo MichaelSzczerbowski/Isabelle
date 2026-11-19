@@ -357,6 +357,8 @@ namespace IslandPlayer
             Segment(g2, L.T("Animacja muzyki", "Music animation"), null,
                 new[] { ("bars", L.T("Słupki", "Bars")), ("dots", L.T("Kropki", "Dots")), ("none", L.T("Brak", "None")) },
                 c.BarsStyle, v => c.BarsStyle = v);
+            Toggle(g2, L.T("Animacja przy starcie", "Startup animation"), L.T("wyspa wyskakuje z logo po uruchomieniu", "the island pops in with the logo on launch"),
+                c.StartupAnimation, v => c.StartupAnimation = v);
             Segment(g2, L.T("Szybkość animacji", "Animation speed"), L.T("jak szybko wyspa się rozwija", "how fast the island expands"),
                 new[] { ("calm", L.T("Spokojna", "Calm")), ("normal", L.T("Normalna", "Normal")), ("fast", L.T("Szybka", "Fast")) },
                 c.AnimSpeed, v => c.AnimSpeed = v);
