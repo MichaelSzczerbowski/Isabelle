@@ -39,6 +39,8 @@ namespace IslandPlayer
         private readonly RectangleGeometry _clip = new RectangleGeometry { RadiusX = 24, RadiusY = 24 };
 
         private (string pl, string en, string icon, Func<StackPanel> build)[] _pages;
+        private Action<Key, ModifierKeys> _capture;
+        private Action _cancelCapture;
 
         public SettingsWindow(bool welcome)
         {
@@ -73,6 +75,14 @@ namespace IslandPlayer
 
             Content = BuildShell(isl?.CoverImage);
             KeyDown += (s, e) => { if (e.Key == Key.Escape) Close(); };
+            // nagrywanie skrótu: następne naciśnięcie klawiszy trafia do wybranego wiersza
+            PreviewKeyDown += (s, e) =>
+            {
+                if (_capture == null) return;
+                e.Handled = true;
+                Key k = e.Key == Key.System ? e.SystemKey : e.Key;
+                _capture(k, Keyboard.Modifiers);
+            };
             if (welcome) ShowWelcome();
             else ShowPage(_lastPage);
         }
@@ -352,10 +362,20 @@ namespace IslandPlayer
                 c.HideInFullscreen, v => c.HideInFullscreen = v);
             Toggle(g, L.T("Skróty klawiszowe", "Keyboard shortcuts"), null, c.Hotkeys, v => c.Hotkeys = v);
 
-            var keys = Group(p, L.T("SKRÓTY", "SHORTCUTS"));
-            KeyRow(keys, L.T("Pauza / wznów", "Play / pause"), "P");
-            KeyRow(keys, L.T("Następny utwór", "Next track"), "→");
-            KeyRow(keys, L.T("Poprzedni utwór", "Previous track"), "←");
+            var keys = Group(p, L.T("SKRÓTY – KLIKNIJ, ABY ZMIENIĆ", "SHORTCUTS – CLICK TO CHANGE"));
+            foreach (var a in Hotkey.Actions) HotkeyRow(keys, a.key, L.T(a.pl, a.en));
+            var reset = new TextBlock
+            {
+                Text = L.T("Przywróć domyślne skróty", "Restore default shortcuts"), FontSize = 12.5, FontWeight = FontWeights.SemiBold,
+                Foreground = _accentBrush, Cursor = Cursors.Hand, Margin = new Thickness(4, 10, 0, 0),
+            };
+            reset.MouseLeftButtonUp += (s, e) =>
+            {
+                c.Shortcuts = new System.Collections.Generic.Dictionary<string, string>();
+                Changed();
+                ShowPage(_lastPage);
+            };
+            p.Children.Add(reset);
 
             var g2 = Group(p, L.T("JĘZYK", "LANGUAGE"));
             Segment(g2, L.T("Język aplikacji", "App language"), null,
@@ -596,6 +616,104 @@ namespace IslandPlayer
             Paint();
             sp.Children.Add(track);
             AddRow(rows, sp);
+        }
+
+        /// <summary>Wiersz ze skrótem: kliknij i naciśnij nowe klawisze (Esc = anuluj, Backspace = wyłącz).</summary>
+        private void HotkeyRow(StackPanel rows, string action, string title)
+        {
+            var g = new Grid { Margin = new Thickness(18, 10, 16, 10) };
+            var labels = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            labels.Children.Add(new TextBlock { Text = title, FontSize = 13.5 });
+            var hint = new TextBlock { FontSize = 11.5, Foreground = Hex("#FF6B61"), Visibility = Visibility.Collapsed, Margin = new Thickness(0, 2, 0, 0) };
+            labels.Children.Add(hint);
+            g.Children.Add(labels);
+
+            var chip = new Border
+            {
+                CornerRadius = new CornerRadius(10), Padding = new Thickness(6, 4, 6, 4), Cursor = Cursors.Hand,
+                HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Background = Brushes.Transparent,
+                BorderBrush = Brushes.Transparent, BorderThickness = new Thickness(1),
+            };
+            var keys = new StackPanel { Orientation = Orientation.Horizontal };
+            chip.Child = keys;
+            g.Children.Add(chip);
+
+            void Render(string text = null)
+            {
+                keys.Children.Clear();
+                if (text != null)
+                {
+                    keys.Children.Add(new TextBlock { Text = text, FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = _accentBrush, Margin = new Thickness(4, 2, 4, 2) });
+                    return;
+                }
+                var parts = Hotkey.Pretty(App.Config.Shortcut(action));
+                if (parts.Count == 0)
+                {
+                    keys.Children.Add(new TextBlock { Text = L.T("brak", "none"), FontSize = 12, Foreground = TextSub, Margin = new Thickness(4, 2, 4, 2) });
+                }
+                foreach (var k in parts)
+                {
+                    keys.Children.Add(new Border
+                    {
+                        CornerRadius = new CornerRadius(7), Background = Hex("#1AFFFFFF"), BorderBrush = Hex("#24FFFFFF"),
+                        BorderThickness = new Thickness(1, 1, 1, 2), Padding = new Thickness(9, 3, 9, 4), Margin = new Thickness(5, 0, 0, 0), MinWidth = 30,
+                        Child = new TextBlock { Text = k, FontSize = 11.5, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center },
+                    });
+                }
+                bool busy = App.Island != null && App.Island.HotkeyFailures.Contains(action);
+                hint.Text = L.T("zajęty przez inny program – wybierz inny", "used by another app – pick another one");
+                hint.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+            }
+
+            void Stop()
+            {
+                _capture = null;
+                _cancelCapture = null;
+                chip.Background = Brushes.Transparent;
+                chip.BorderBrush = Brushes.Transparent;
+            }
+
+            chip.MouseEnter += (s, e) => { if (_capture == null) chip.Background = Hex("#0FFFFFFF"); };
+            chip.MouseLeave += (s, e) => { if (_capture == null) chip.Background = Brushes.Transparent; };
+            chip.MouseLeftButtonUp += (s, e) =>
+            {
+                _cancelCapture?.Invoke();
+                Focus();
+                Keyboard.Focus(this);
+                chip.Background = Hex("#14FFFFFF");
+                chip.BorderBrush = _accentBrush;
+                Render(L.T("Naciśnij skrót…", "Press keys…"));
+                _cancelCapture = () => { Stop(); Render(); };
+                _capture = (k, mods) =>
+                {
+                    if (Hotkey.IsModifier(k)) return;                       // czekamy na właściwy klawisz
+                    if (k == Key.Escape) { Stop(); Render(); return; }
+                    var c = App.Config;
+                    if (c.Shortcuts == null) c.Shortcuts = new System.Collections.Generic.Dictionary<string, string>();
+                    if (k == Key.Back || k == Key.Delete)
+                    {
+                        c.Shortcuts[action] = "";                           // wyłączony
+                    }
+                    else
+                    {
+                        if (mods == ModifierKeys.None && !Hotkey.AllowedAlone(k))
+                        {
+                            Render(L.T("dodaj Ctrl, Alt lub Shift", "add Ctrl, Alt or Shift"));
+                            return;
+                        }
+                        string text = Hotkey.Format(mods, k);
+                        // ten sam skrót nie może być przypisany do dwóch akcji
+                        foreach (var other in Hotkey.Actions)
+                            if (other.key != action && c.Shortcut(other.key) == text) c.Shortcuts[other.key] = "";
+                        c.Shortcuts[action] = text;
+                    }
+                    Stop();
+                    Changed();
+                    ShowPage(_lastPage);
+                };
+            };
+            Render();
+            AddRow(rows, g);
         }
 
         private static void KeyRow(StackPanel rows, string title, string key)

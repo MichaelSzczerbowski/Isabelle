@@ -73,7 +73,8 @@ namespace IslandPlayer
         private double _lastFrame;
         private string _posTextCache, _durTextCache;
 
-        private const int HkPlay = 1, HkNext = 2, HkPrev = 3;
+        /// <summary>Akcje, których skrótu nie udało się zarejestrować (zajęte przez inny program).</summary>
+        public HashSet<string> HotkeyFailures { get; } = new HashSet<string>();
 
         public IslandWindow()
         {
@@ -193,14 +194,14 @@ namespace IslandPlayer
         private void RegisterHotkeys()
         {
             if (_hwnd == IntPtr.Zero) return;
-            Native.UnregisterHotKey(_hwnd, HkPlay);
-            Native.UnregisterHotKey(_hwnd, HkNext);
-            Native.UnregisterHotKey(_hwnd, HkPrev);
+            foreach (var a in Hotkey.Actions) Native.UnregisterHotKey(_hwnd, a.id);
+            HotkeyFailures.Clear();
             if (!App.Config.Hotkeys) return;
-            uint mods = Native.MOD_CONTROL | Native.MOD_ALT | Native.MOD_NOREPEAT;
-            Native.RegisterHotKey(_hwnd, HkPlay, mods, 0x50);  // Ctrl+Alt+P
-            Native.RegisterHotKey(_hwnd, HkNext, mods, 0x27);  // Ctrl+Alt+→
-            Native.RegisterHotKey(_hwnd, HkPrev, mods, 0x25);  // Ctrl+Alt+←
+            foreach (var a in Hotkey.Actions)
+            {
+                if (!Hotkey.Parse(App.Config.Shortcut(a.key), out uint mods, out uint vk)) continue;
+                if (!Native.RegisterHotKey(_hwnd, a.id, mods | Native.MOD_NOREPEAT, vk)) HotkeyFailures.Add(a.key);
+            }
         }
 
         private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -209,9 +210,22 @@ namespace IslandPlayer
             {
                 switch (wParam.ToInt32())
                 {
-                    case HkPlay: PlayPause(); break;
-                    case HkNext: _media.Next(); break;
-                    case HkPrev: _media.Previous(); break;
+                    case 1: PlayPause(); break;
+                    case 2: _media.Next(); break;
+                    case 3: _media.Previous(); break;
+                    case 4:
+                        _expanded = !_expanded;
+                        if (_expanded) _collapseTimer.Stop();
+                        EnsureLoop();
+                        break;
+                    case 5:
+                    case 6:
+                        if (_audio != null)
+                        {
+                            float v = _audio.Step(wParam.ToInt32() == 5 ? 2 : -2);
+                            ShowVolume(v, v <= 0);
+                        }
+                        break;
                 }
                 handled = true;
             }
@@ -224,9 +238,7 @@ namespace IslandPlayer
             {
                 if (_hwnd != IntPtr.Zero)
                 {
-                    Native.UnregisterHotKey(_hwnd, HkPlay);
-                    Native.UnregisterHotKey(_hwnd, HkNext);
-                    Native.UnregisterHotKey(_hwnd, HkPrev);
+                    foreach (var a in Hotkey.Actions) Native.UnregisterHotKey(_hwnd, a.id);
                 }
                 Native.SetVolumeOsdVisible(true);
                 _audio?.Dispose();

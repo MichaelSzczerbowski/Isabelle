@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 
@@ -36,6 +37,11 @@ namespace IslandPlayer
         public bool HideInFullscreen { get; set; } = true;
         public bool Hotkeys { get; set; } = true;
         public double Scale { get; set; } = 1.0;
+        /// <summary>Własne skróty: akcja → np. "Ctrl+Alt+P" (pusty tekst = wyłączony, brak wpisu = domyślny).</summary>
+        public Dictionary<string, string> Shortcuts { get; set; } = new Dictionary<string, string>();
+
+        public string Shortcut(string action) =>
+            Shortcuts != null && Shortcuts.TryGetValue(action, out var s) ? s : Hotkey.Default(action);
         /// <summary>Krawędź ekranu: top / bottom / left / right</summary>
         public string Edge { get; set; } = "top";
         /// <summary>false = środek krawędzi głównego monitora; true = miejsce, gdzie wyspę przeciągnięto</summary>
