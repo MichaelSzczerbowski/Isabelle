@@ -13,6 +13,8 @@ namespace IslandPlayer
     {
         public double Time;
         public string Text;
+        /// <summary>Czas linijki oszacowany (tekst bez synchronizacji) - przewija się w przybliżeniu.</summary>
+        public bool Estimated;
         public bool Instrumental =>
             string.IsNullOrWhiteSpace((Text ?? "").Replace("♪", "").Replace("♫", "").Replace("🎵", "").Replace("🎶", "").Replace("…", ""));
     }
@@ -40,36 +42,33 @@ namespace IslandPlayer
             var result = new List<LyricLine>();
             try
             {
-                string artist1 = artist.Split(',', '&')[0].Trim();
-                string synced = null;
-                try
-                {
-                    string url = "https://lrclib.net/api/get?track_name=" + Uri.EscapeDataString(title) +
-                                 "&artist_name=" + Uri.EscapeDataString(artist1) +
-                                 (duration > 0 ? "&duration=" + ((int)duration).ToString(CultureInfo.InvariantCulture) : "");
-                    using (var doc = JsonDocument.Parse(await Http.GetStringAsync(url)))
-                        if (doc.RootElement.TryGetProperty("syncedLyrics", out var s) && s.ValueKind == JsonValueKind.String)
-                            synced = s.GetString();
-                }
-                catch { }
+                string artist1 = CleanArtist(artist);
+                string title1 = CleanTitle(title);
+                string synced = null, plain = null;
 
-                if (string.IsNullOrEmpty(synced))
+                // 1) dokładne dopasowanie (tytuł + wykonawca + długość)
+                var exact = await TryGet("https://lrclib.net/api/get?track_name=" + Uri.EscapeDataString(title) +
+                                         "&artist_name=" + Uri.EscapeDataString(artist1) +
+                                         (duration > 0 ? "&duration=" + ((int)duration).ToString(CultureInfo.InvariantCulture) : ""));
+                if (exact != null) (synced, plain) = Pick(exact.Value);
+
+                // 2) wyszukiwanie: oczyszczony tytuł + wykonawca, potem wolne zapytanie "tytuł wykonawca"
+                if (synced == null)
                 {
-                    string url = "https://lrclib.net/api/search?track_name=" + Uri.EscapeDataString(CleanTitle(title)) +
-                                 "&artist_name=" + Uri.EscapeDataString(artist1);
-                    using (var doc = JsonDocument.Parse(await Http.GetStringAsync(url)))
-                    {
-                        foreach (var item in doc.RootElement.EnumerateArray())
-                        {
-                            if (item.TryGetProperty("syncedLyrics", out var s) && s.ValueKind == JsonValueKind.String)
-                            {
-                                synced = s.GetString();
-                                break;
-                            }
-                        }
-                    }
+                    var r = await Search("https://lrclib.net/api/search?track_name=" + Uri.EscapeDataString(title1) +
+                                         "&artist_name=" + Uri.EscapeDataString(artist1), duration);
+                    synced = r.synced;
+                    plain ??= r.plain;
                 }
+                if (synced == null)
+                {
+                    var r = await Search("https://lrclib.net/api/search?q=" + Uri.EscapeDataString(title1 + " " + artist1), duration);
+                    synced = r.synced;
+                    plain ??= r.plain;
+                }
+
                 if (!string.IsNullOrEmpty(synced)) result = Parse(synced);
+                else if (!string.IsNullOrEmpty(plain)) result = Estimate(plain, duration); // awaryjnie: tekst bez synchronizacji
             }
             catch (Exception ex)
             {
@@ -84,11 +83,80 @@ namespace IslandPlayer
             return result;
         }
 
+        private static async Task<JsonElement?> TryGet(string url)
+        {
+            try
+            {
+                using (var doc = JsonDocument.Parse(await Http.GetStringAsync(url)))
+                    return doc.RootElement.Clone();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static (string synced, string plain) Pick(JsonElement item)
+        {
+            string synced = null, plain = null;
+            if (item.ValueKind != JsonValueKind.Object) return (null, null);
+            if (item.TryGetProperty("syncedLyrics", out var s) && s.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(s.GetString()))
+                synced = s.GetString();
+            if (item.TryGetProperty("plainLyrics", out var p) && p.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(p.GetString()))
+                plain = p.GetString();
+            return (synced, plain);
+        }
+
+        /// <summary>Z wyników wybiera ten z tekstem zsynchronizowanym i długością najbliższą utworowi.</summary>
+        private static async Task<(string synced, string plain)> Search(string url, double duration)
+        {
+            var arr = await TryGet(url);
+            if (arr == null || arr.Value.ValueKind != JsonValueKind.Array) return (null, null);
+            JsonElement? best = null;
+            double bestScore = double.MaxValue;
+            foreach (var item in arr.Value.EnumerateArray())
+            {
+                bool hasSynced = item.TryGetProperty("syncedLyrics", out var s) && s.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(s.GetString());
+                double d = item.TryGetProperty("duration", out var du) && du.ValueKind == JsonValueKind.Number ? du.GetDouble() : 0;
+                double diff = duration > 0 && d > 0 ? Math.Abs(d - duration) : 5;
+                if (duration > 0 && d > 0 && diff > 15) continue; // inna wersja utworu
+                double score = diff + (hasSynced ? 0 : 1000);
+                if (score < bestScore) { bestScore = score; best = item; }
+            }
+            return best != null ? Pick(best.Value) : (null, null);
+        }
+
         private static string CleanTitle(string t)
         {
-            t = Regex.Replace(t, @"\s*[\(\[].*?[\)\]]", "");
-            t = Regex.Replace(t, @"\s+-\s+.*$", "");
+            t = Regex.Replace(t, @"\s*[\(\[].*?[\)\]]", "");                       // (Remastered), [Official Video]
+            t = Regex.Replace(t, @"\s+-\s+.*$", "");                                  // " - Radio Edit"
+            t = Regex.Replace(t, @"\s+(feat\.?|ft\.?|featuring)\s+.*$", "", RegexOptions.IgnoreCase);
             return t.Trim();
+        }
+
+        private static string CleanArtist(string a)
+        {
+            a = Regex.Split(a ?? "", @",|&| x | X |\s+(feat\.?|ft\.?|featuring)\s+", RegexOptions.IgnoreCase)[0];
+            return a.Trim();
+        }
+
+        /// <summary>Tekst bez czasów: linijki rozłożone równo na długość utworu (przewijanie w przybliżeniu).</summary>
+        private static List<LyricLine> Estimate(string plain, double duration)
+        {
+            var lines = new List<string>();
+            foreach (string raw in plain.Split('\n'))
+            {
+                string l = raw.Trim();
+                if (l.Length > 0) lines.Add(l);
+            }
+            var list = new List<LyricLine>();
+            if (lines.Count == 0) return list;
+            double start = 8, end = duration > 30 ? duration - 12 : Math.Max(60, lines.Count * 3.5);
+            double step = Math.Max(1.5, (end - start) / lines.Count);
+            list.Add(new LyricLine { Time = 0, Text = "", Estimated = true });
+            for (int i = 0; i < lines.Count; i++)
+                list.Add(new LyricLine { Time = start + i * step, Text = lines[i], Estimated = true });
+            return list;
         }
 
         private static List<LyricLine> Parse(string lrc)
