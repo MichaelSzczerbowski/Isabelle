@@ -86,6 +86,9 @@ namespace IslandPlayer
             Content = root;
 
             // ---- tło: dwie warstwy rozmytej okładki, powoli krążące ----
+            // w Canvas, bo zwykła siatka przycina duży obrazek do rozmiaru okna i przy obrocie widać jego rogi
+            var bgHost = new Canvas { ClipToBounds = true };
+            root.Children.Add(bgHost);
             foreach (var (img, rot, sc, op) in new[] { (_bg1, _rot1, _sc1, 1.0), (_bg2, _rot2, _sc2, 0.55) })
             {
                 img.Stretch = Stretch.UniformToFill;
@@ -96,7 +99,7 @@ namespace IslandPlayer
                 g.Children.Add(rot);
                 img.RenderTransform = g;
                 img.Effect = new BlurEffect { Radius = 110, RenderingBias = RenderingBias.Performance, KernelType = KernelType.Gaussian };
-                root.Children.Add(img);
+                bgHost.Children.Add(img);
             }
             root.Children.Add(new Rectangle { Fill = new SolidColorBrush(Color.FromArgb(120, 0, 0, 0)) });
 
@@ -204,10 +207,15 @@ namespace IslandPlayer
             };
             SizeChanged += (s, e) => Layout();
             CompositionTarget.Rendering += OnFrame;
-            Closed += (s, e) => CompositionTarget.Rendering -= OnFrame;
+            Closed += (s, e) =>
+            {
+                CompositionTarget.Rendering -= OnFrame;
+                _island.KeepPlayingAfter(_wasPlaying);
+            };
         }
 
         private DateTime _manualUntil = DateTime.MinValue;
+        private bool _wasPlaying;
 
         private Border RoundButton(string geo, double size, double icon, Action click, System.Windows.Shapes.Path custom = null,
                                    bool filled = false, bool stroke = false)
@@ -246,12 +254,13 @@ namespace IslandPlayer
             foreach (var el in new FrameworkElement[] { _title, _artist, _track })
                 el.Width = Math.Max(size, lyrics ? size : Math.Min(w * 0.5, size * 1.5));
             ((FrameworkElement)_tPos.Parent).Width = _track.Width;
-            double bgSize = Math.Max(w, h) * 1.1;
+            // kwadrat większy niż przekątna ekranu - obrócony nigdy nie odsłania rogów
+            double bgSize = Math.Sqrt(w * w + h * h) * 1.05;
             foreach (var img in new[] { _bg1, _bg2 })
             {
                 img.Width = img.Height = bgSize;
-                img.HorizontalAlignment = HorizontalAlignment.Center;
-                img.VerticalAlignment = VerticalAlignment.Center;
+                Canvas.SetLeft(img, (w - bgSize) / 2);
+                Canvas.SetTop(img, (h - bgSize) / 2);
             }
             foreach (var l in _lines) l.FontSize = LyricSize();
         }
@@ -298,6 +307,7 @@ namespace IslandPlayer
             _tPos.Text = Time(pos);
             _tDur.Text = dur > 0 ? "-" + Time(dur - pos) : "";
             bool playing = _island.Playing;
+            _wasPlaying = playing;
             string geo = playing ? PauseGeo : PlayGeo;
             if (_playIcon.Tag as string != geo) { _playIcon.Tag = geo; _playIcon.Data = Geometry.Parse(geo); }
 

@@ -598,6 +598,22 @@ namespace IslandPlayer
             _dragPos = _snap.Duration > 0 ? Math.Clamp(seconds, 0, _snap.Duration) : Math.Max(0, seconds);
             SendSeek(true);
         }
+        /// <summary>
+        /// Po zamknięciu trybu pełnoekranowego muzyka ma grać dalej: jeśli grała, a odtwarzacz
+        /// sam się zatrzymał (np. przez zmianę okna na pierwszym planie), wznawiamy ją.
+        /// </summary>
+        public async void KeepPlayingAfter(bool wasPlaying)
+        {
+            if (!wasPlaying) return;
+            var key = _snap?.Key;
+            foreach (int wait in new[] { 500, 1200 })
+            {
+                await System.Threading.Tasks.Task.Delay(wait);
+                if (_snap == null || _snap.Key != key) return;
+                if (!IsPlaying) { _media.PlayPause(); return; }
+            }
+        }
+
         /// <summary>Wczytuje tekst piosenki nawet przy wyłączonym tekście w wyspie.</summary>
         public void EnsureLyrics()
         {
