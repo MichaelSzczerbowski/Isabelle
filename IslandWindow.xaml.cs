@@ -116,7 +116,11 @@ namespace IslandPlayer
             PrevBtn.Click += (s, e) => _media.Previous();
             AppBtn.Click += (s, e) => _media.CycleApp();
             LyricsBtn.Click += (s, e) => ToggleLyrics();
-            ShareBtn.Click += (s, e) => ShareNowPlaying(false);
+            ShareBtn.Click += (s, e) =>
+            {
+                if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) ShareLink(); else ShareNowPlaying(false);
+            };
+            ShareBtn.MouseRightButtonUp += (s, e) => { e.Handled = true; ShareLink(); };
             foreach (var v in new FrameworkElement[] { CompactView, ToastView, ExpandedView, IdleExpandedView, CompactVView, ToastVView })
                 v.RenderTransform = _swipeShift;
             OpenSpotifyBtn.Click += (s, e) => OpenSpotify();
@@ -310,7 +314,8 @@ namespace IslandPlayer
             IdleSub.Text = L.T("Włącz muzykę w dowolnej aplikacji", "Play music in any app");
             ToastLabel.Text = ToastVLabel.Text = L.T("TERAZ GRA", "NOW PLAYING");
             LyricsBtn.ToolTip = L.T("Tekst piosenki", "Lyrics");
-            ShareBtn.ToolTip = L.T("Karta do udostępnienia (kopiuje obrazek)", "Share card (copies an image)");
+            ShareBtn.ToolTip = L.T("Kliknij: kopiuj kartę (obrazek)\nPrawy przycisk: kopiuj link do utworu",
+                                   "Click: copy the share card (image)\nRight-click: copy a link to the song");
             AppBtn.ToolTip = L.T("Przełącz odtwarzacz", "Switch player");
             if (_snap != null) AppText.Text = MediaService.PrettyAppName(_snap.AppId);
         }
@@ -1203,15 +1208,22 @@ namespace IslandPlayer
         // ================= karta do udostępnienia =================
         private DispatcherTimer _shareTimer;
 
+        /// <summary>Kopiuje klikalny link do utworu.</summary>
+        private void ShareLink()
+        {
+            var snap = _snap;
+            if (snap == null || string.IsNullOrWhiteSpace(snap.Title)) return;
+            ShareCard.CopyText(ShareCard.Link(snap.AppId, snap.Title, snap.Artist).url);
+            ShareConfirm(false, L.T("SKOPIOWANO LINK", "LINK COPIED"));
+        }
+
         private void ShareNowPlaying(bool fromHotkey)
         {
             var snap = _snap;
             if (snap == null || string.IsNullOrWhiteSpace(snap.Title)) return;
             try
             {
-                var (link, linkLabel) = ShareCard.Link(snap.AppId, snap.Title, snap.Artist);
-                var card = ShareCard.Render(_cover, snap.Title, snap.Artist, snap.PositionNow(DateTime.UtcNow), snap.Duration, _accent,
-                                            link, linkLabel);
+                var card = ShareCard.Render(_cover, snap.Title, snap.Artist, snap.PositionNow(DateTime.UtcNow), snap.Duration, _accent);
                 ShareCard.SaveAndCopy(card, snap.Title, snap.Artist);
             }
             catch (Exception ex)
@@ -1220,11 +1232,16 @@ namespace IslandPlayer
                 return;
             }
 
-            // potwierdzenie: ptaszek na przycisku, a ze skrótu (przy zamkniętej wyspie) krótki dymek
+            ShareConfirm(fromHotkey, L.T("SKOPIOWANO KARTĘ", "CARD COPIED"));
+        }
+
+        /// <summary>Potwierdzenie: ptaszek na przycisku, a ze skrótu (przy zamkniętej wyspie) krótki dymek.</summary>
+        private void ShareConfirm(bool fromHotkey, string label)
+        {
             ShareIcon.Data = Geometry.Parse("M0,6 L2,4 L5,7 L10,1 L12,3 L5,11 Z");
             if (fromHotkey && !_expanded)
             {
-                ToastLabel.Text = ToastVLabel.Text = L.T("SKOPIOWANO KARTĘ", "CARD COPIED");
+                ToastLabel.Text = ToastVLabel.Text = label;
                 _toastKind = "track";
                 _toastUntil = DateTime.UtcNow.AddSeconds(2.5);
                 EnsureLoop();
