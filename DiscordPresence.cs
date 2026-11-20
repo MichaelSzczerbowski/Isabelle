@@ -15,7 +15,7 @@ namespace IslandPlayer
     public sealed class DiscordPresence : IDisposable
     {
         /// <summary>Application ID z https://discord.com/developers/applications (aplikacja "Isabelle").</summary>
-        public const string ClientId = "DISCORD_APPLICATION_ID";
+        public const string ClientId = "1573360659687678213";
         public static bool Configured => !ClientId.StartsWith("DISCORD_", StringComparison.Ordinal);
 
         private NamedPipeClientStream _pipe;
@@ -98,7 +98,11 @@ namespace IslandPlayer
             await _gate.WaitAsync();
             try
             {
-                if (!Connected && !TryConnect()) return;
+                if (!Connected && !TryConnect())
+                {
+                    _lastKey = null;      // Discord wyłączony - spróbujemy znowu przy następnej aktualizacji
+                    return;
+                }
                 WriteFrame(1, json);
             }
             catch (Exception ex)
@@ -124,11 +128,22 @@ namespace IslandPlayer
                     pipe.Connect(150);
                     _pipe = pipe;
                     WriteFrame(0, JsonSerializer.Serialize(new { v = 1, client_id = ClientId }));
+                    // czekamy na READY od Discorda - wcześniej wysłany status bywa ignorowany
+                    var head = new byte[8];
+                    var ready = ReadExact(pipe, head, 8);
+                    if (!ready.Wait(3000) || !ready.Result) throw new IOException("no READY");
+                    int len = BitConverter.ToInt32(head, 4);
+                    if (len < 0 || len > 1 << 20) throw new IOException("bad frame");
+                    var body = new byte[len];
+                    var rb = ReadExact(pipe, body, len);
+                    if (!rb.Wait(3000) || !rb.Result) throw new IOException("no READY");
+                    if (BitConverter.ToInt32(head, 0) == 2) throw new IOException("closed: " + Encoding.UTF8.GetString(body));
                     _ = Task.Run(ReadLoop);  // odpowiedzi Discorda trzeba odbierać, inaczej potok się zapcha
                     return true;
                 }
-                catch
+                catch (Exception ex)
                 {
+                    if (ReferenceEquals(_pipe, pipe)) { _pipe = null; Log.Info("discord: " + ex.Message); }
                     pipe.Dispose();
                 }
             }
