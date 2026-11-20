@@ -1068,8 +1068,6 @@ namespace IslandPlayer
             CompositionTarget.Rendering += OnRendering;
         }
 
-        private bool _midFps;
-
         private void StopLoop()
         {
             if (!_loopOn) return;
@@ -1134,9 +1132,6 @@ namespace IslandPlayer
             double t = _clock.Elapsed.TotalSeconds;
             // gdy wyspa stoi w miejscu (grają tylko słupki) wystarczy 30 klatek na sekundę
             if (_lowFps && t - _lastFrame < 1.0 / 30) return;
-            // rozwinięta wyspa stoi (gra tło, tekst) - na monitorach 120/144 Hz wystarczy 60 kl./s;
-            // ruch, przeciąganie i zmiana rozmiaru dalej idą z pełną płynnością monitora
-            if (_midFps && t - _lastFrame < 1.0 / 62) return;
             double dt = t - _lastFrame;
             _lastFrame = t;
             int steps = (int)Math.Round(dt * 60);
@@ -1322,7 +1317,6 @@ namespace IslandPlayer
                 _settledSince = 0;
             }
             _lowFps = croppable;
-            _midFps = !croppable && settled && !_dragging && !_moving;
             needed = needed || (croppable && _crop == null) || st || StartupView.Opacity > 0;
 
             if (!needed) StopLoop();
