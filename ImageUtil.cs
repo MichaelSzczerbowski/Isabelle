@@ -90,7 +90,8 @@ namespace IslandPlayer
             bool plausible = aw >= w * 0.55 && aw <= w * 0.95 && top + aw <= h && Math.Abs(left - (w - right)) <= w * 0.06;
             if (!plausible)
             {
-                aw = (int)(w * 0.78);
+                // nie udało się znaleźć brzegów: bierzemy kwadrat z góry, na tyle mały, żeby ominąć pasek z logo na dole
+                aw = (int)(Math.Min(w, h) * 0.74);
                 left = (w - aw) / 2;
                 top = 0;
             }
