@@ -100,13 +100,13 @@
             <Grid x:Name="PillInner" ClipToBounds="True">
 
                 <!-- rozmyta okładka w tle (jak w Apple Music) -->
-                <Image x:Name="BgCover" Stretch="UniformToFill" Width="420" Height="420"
+                <Image x:Name="BgCover" Stretch="UniformToFill" Width="720" Height="720"
                        HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0" IsHitTestVisible="False">
                     <Image.Effect>
                         <BlurEffect Radius="48" RenderingBias="Performance" />
                     </Image.Effect>
                 </Image>
-                <Image x:Name="BgCover2" Stretch="UniformToFill" Width="420" Height="420"
+                <Image x:Name="BgCover2" Stretch="UniformToFill" Width="720" Height="720"
                        HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0" IsHitTestVisible="False">
                     <Image.Effect>
                         <BlurEffect Radius="56" RenderingBias="Performance" />
@@ -306,7 +306,7 @@
                     </Grid>
 
                     <!-- tekst piosenki -->
-                    <Grid x:Name="LyricsPanel" Height="84" Margin="18,12,18,0" ClipToBounds="True" Visibility="Collapsed">
+                    <Grid x:Name="LyricsPanel" Height="84" Margin="18,12,18,0" ClipToBounds="True" Visibility="Collapsed" Background="Transparent">
                         <Grid.OpacityMask>
                             <!-- Absolute: maska liczona od wysokości panelu, a nie od całego (długiego) tekstu -->
                             <LinearGradientBrush MappingMode="Absolute" StartPoint="0,0" EndPoint="0,84">

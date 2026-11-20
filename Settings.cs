@@ -48,6 +48,11 @@ namespace IslandPlayer
         public bool CustomPosition { get; set; }
         public double AnchorX { get; set; }
         public double AnchorY { get; set; }
+        /// <summary>Anchor zapisany w pikselach ekranu (nowy format) + nazwa monitora.</summary>
+        public bool AnchorPx { get; set; }
+        public string MonitorName { get; set; }
+        /// <summary>Kliknięcie otwiera odtwarzacz na stałe - zamyka go dopiero kliknięcie gdzie indziej.</summary>
+        public bool ClickToPin { get; set; }
         // ---- personalizacja ----
         /// <summary>cover (z okładki) / pink / green / blue / purple / orange / red / white</summary>
         public string Accent { get; set; } = "cover";

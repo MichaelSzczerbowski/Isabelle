@@ -87,7 +87,8 @@ namespace IslandPlayer
             Content = _host;
 
             _expandTimer.Tick += (s, e) => { _expandTimer.Stop(); _expanded = true; EnsureLoop(); };
-            _collapseTimer.Tick += (s, e) => { _collapseTimer.Stop(); if (!_hover && !_dragging) { _expanded = false; EnsureLoop(); } };
+            _collapseTimer.Tick += (s, e) => { _collapseTimer.Stop(); if (!_hover && !_dragging && !_pinned) { _expanded = false; EnsureLoop(); } };
+            _pinTimer.Tick += (s, e) => CheckPinnedClick();
             _slowTimer.Tick += (s, e) => SlowTick();
             _wallTimer.Tick += (s, e) =>
             {
@@ -101,7 +102,7 @@ namespace IslandPlayer
             {
                 _hover = false;
                 _expandTimer.Stop();
-                if (!_dragging) _collapseTimer.Start();
+                if (!_dragging && !_pinned) _collapseTimer.Start();
             };
             Pill.MouseLeftButtonDown += PillDown;
             Pill.MouseMove += PillMove;
@@ -125,6 +126,7 @@ namespace IslandPlayer
 
             PillInner.Clip = _clip;
             TitleClip.SizeChanged += (s, e) => Marquee.Update(TitleClip, TitleText, false);
+            LyricsPanel.MouseWheel += LyricsWheel;
             CompactTitleClip.SizeChanged += (s, e) => Marquee.Update(CompactTitleClip, CompactTitleText, true);
             BgCover.RenderTransformOrigin = BgCover2.RenderTransformOrigin = new Point(0.5, 0.5);
             var g1 = new TransformGroup();
@@ -146,6 +148,10 @@ namespace IslandPlayer
         {
             _hwnd = new WindowInteropHelper(this).Handle;
             Native.MakeToolWindow(_hwnd);
+            // rozmiar i pozycję okna ustawiamy sami (jednym wywołaniem, w pikselach) - bez skakania między monitorami
+            ClearValue(WidthProperty);
+            ClearValue(HeightProperty);
+            DpiChanged += (s2, e2) => { if (!_moving) Dispatcher.BeginInvoke(new Action(PlaceWindow), DispatcherPriority.Background); };
             HwndSource.FromHwnd(_hwnd)?.AddHook(WndProc);
             RegisterHotkeys();
         }
@@ -244,6 +250,8 @@ namespace IslandPlayer
                     case 2: _media.Next(); break;
                     case 3: _media.Previous(); break;
                     case 4:
+                        _pinned = false;
+                        _pinTimer.Stop();
                         _expanded = !_expanded;
                         if (_expanded) _collapseTimer.Stop();
                         EnsureLoop();
@@ -654,11 +662,42 @@ namespace IslandPlayer
                     };
                 }
                 el.Opacity = 0.28;
+                double lineTime = line.Time;
+                if (el is TextBlock)
+                {
+                    // klik w linijkę = przewiń piosenkę do tego miejsca
+                    el.Cursor = Cursors.Hand;
+                    el.MouseLeftButtonDown += (s, e) => e.Handled = true;
+                    el.MouseLeftButtonUp += (s, e) =>
+                    {
+                        e.Handled = true;
+                        if (_snap == null) return;
+                        _dragPos = lineTime;
+                        SendSeek(true);
+                        _lyricsManualUntil = DateTime.MinValue;
+                    };
+                }
                 LyricsStack.Children.Add(el);
             }
         }
 
         private bool LyricsVisible => App.Config.Lyrics && _lyrics != null && _lyrics.Count > 0;
+
+        // ---- ręczne przewijanie tekstu kółkiem ----
+        private DateTime _lyricsManualUntil = DateTime.MinValue;
+        private bool _lyricsWasManual;
+
+        private void LyricsWheel(object sender, MouseWheelEventArgs e)
+        {
+            if (!LyricsVisible) return;
+            e.Handled = true; // kółko nad tekstem przewija tekst, a nie zmienia głośność
+            double y = LyricsShift.Y;
+            LyricsShift.BeginAnimation(TranslateTransform.YProperty, null);
+            double max = LyricsPanel.Height / 2, min = LyricsPanel.Height / 2 - LyricsStack.ActualHeight;
+            LyricsShift.Y = Math.Max(min, Math.Min(max, y + e.Delta / 120.0 * 30));
+            _lyricsManualUntil = DateTime.UtcNow.AddSeconds(4);
+            EnsureLoop();
+        }
 
         private void UpdateLyrics(double pos, int steps)
         {
@@ -668,6 +707,21 @@ namespace IslandPlayer
             {
                 if (_lyrics[i].Time <= pos + 0.25) idx = i;
                 else break;
+            }
+
+            bool manual = DateTime.UtcNow < _lyricsManualUntil;
+            if (_lyricsWasManual && !manual) _lyricIdx = -2; // koniec przewijania - wróć do bieżącej linijki
+            _lyricsWasManual = manual;
+            if (manual)
+            {
+                // podczas przewijania wszystkie linijki czytelne, bieżąca wyróżniona
+                for (int i = 0; i < LyricsStack.Children.Count; i++)
+                {
+                    var el = (UIElement)LyricsStack.Children[i];
+                    double t = i == idx ? 1 : 0.62;
+                    el.Opacity += (t - el.Opacity) * Math.Min(1, 0.2 * steps);
+                }
+                return;
             }
 
             if (idx != _lyricIdx)
@@ -968,18 +1022,18 @@ namespace IslandPlayer
             double level = _peakMax > 0.02 ? Math.Min(1, _peakS / Math.Max(0.05, _peakMax * 0.8)) : 0;
             double beat = playing ? level * 0.05 : 0;
 
-            double s1 = 1.3 + 0.07 * Math.Sin(a * 0.45) + beat;
+            double s1 = 1.08 + 0.05 * Math.Sin(a * 0.45) + beat;
             _bgScale1.ScaleX = _bgScale1.ScaleY = s1;
             _bgRot1.Angle = (a * 6) % 360;
-            _bgMove1.X = 45 * Math.Sin(a * 0.31);
-            _bgMove1.Y = 30 * Math.Cos(a * 0.27);
+            _bgMove1.X = 26 * Math.Sin(a * 0.31);
+            _bgMove1.Y = 18 * Math.Cos(a * 0.27);
 
-            double s2 = 1.55 + 0.08 * Math.Cos(a * 0.38) + beat;
+            double s2 = 1.2 + 0.06 * Math.Cos(a * 0.38) + beat;
             _bgScale2.ScaleX = -s2;   // lustrzane odbicie - inne plamy koloru
             _bgScale2.ScaleY = s2;
             _bgRot2.Angle = (-a * 4.5) % 360;
-            _bgMove2.X = 55 * Math.Cos(a * 0.23);
-            _bgMove2.Y = 38 * Math.Sin(a * 0.35);
+            _bgMove2.X = 30 * Math.Cos(a * 0.23);
+            _bgMove2.Y = 22 * Math.Sin(a * 0.35);
             BgCover2.Opacity = expOp * 0.6;
         }
 
@@ -1013,20 +1067,19 @@ namespace IslandPlayer
                 _moving = true;
                 _expandTimer.Stop();
                 _expanded = false;
+                _pinned = false;
+                _pinTimer.Stop();
                 Pill.CaptureMouse();
                 SetAlign("top");
                 ApplyOrientation(false);
                 _crop = null;
                 System.Windows.Controls.Canvas.SetLeft(Root, 0);
                 System.Windows.Controls.Canvas.SetTop(Root, 0);
-                Width = 520 * Sc;
-                Height = 380 * Sc;
                 EnsureLoop();
             }
             // wyspa jedzie za kursorem
-            double d = Dpi, sc = Sc;
-            Left = p.X / d - 260 * sc;
-            Top = p.Y / d - (8 + Math.Max(16, _h / 2)) * sc;
+            double k = Sc * Dpi;
+            SetBoundsPx(p.X - 260 * k, p.Y - (8 + Math.Max(16, _h / 2)) * k, 520 * k, 380 * k);
         }
 
         private void PillUp(object sender, MouseButtonEventArgs e)
@@ -1041,7 +1094,41 @@ namespace IslandPlayer
                 SnapToEdge(CursorPx());
                 return;
             }
-            if (wasDown && !_expanded) { _expanded = true; EnsureLoop(); }
+            if (!wasDown) return;
+            if (App.Config.ClickToPin)
+            {
+                // otwarty na stałe - zamknie go dopiero kliknięcie poza wyspą
+                _pinned = true;
+                _expanded = true;
+                _collapseTimer.Stop();
+                _pinTimer.Start();
+                EnsureLoop();
+            }
+            else if (!_expanded)
+            {
+                _expanded = true;
+                EnsureLoop();
+            }
+        }
+
+        // ---- przypięcie po kliknięciu ----
+        private bool _pinned;
+        private readonly DispatcherTimer _pinTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(40) };
+
+        private void CheckPinnedClick()
+        {
+            if (!_pinned) { _pinTimer.Stop(); return; }
+            if (!Native.AnyMouseButtonDown()) return;
+            Point p = CursorPx();
+            if (Native.IsOnTopAt(_hwnd, (int)p.X, (int)p.Y) && Pill.IsMouseOver) return; // klik w samą wyspę
+            Unpin();
+        }
+
+        private void Unpin()
+        {
+            _pinned = false;
+            _pinTimer.Stop();
+            if (!_hover) { _expanded = false; EnsureLoop(); }
         }
 
         /// <summary>Przykleja wyspę do najbliższej krawędzi monitora, nad którym ją puszczono.</summary>
@@ -1058,62 +1145,82 @@ namespace IslandPlayer
             var c = App.Config;
             c.Edge = edge;
             c.CustomPosition = true;
-            c.AnchorX = px.X / Dpi;
-            c.AnchorY = px.Y / Dpi;
+            c.AnchorX = px.X;
+            c.AnchorY = px.Y;
+            c.AnchorPx = true;
+            c.MonitorName = scr.DeviceName;
             c.Save();
             PlaceWindow();
             if (_hover) _collapseTimer.Stop();
         }
 
         /// <summary>Ustawia okno przy wybranej krawędzi; wyspa rośnie w stronę środka ekranu.</summary>
+        private double _monScale = 1;
+
+        /// <summary>Jedno wywołanie systemu: pozycja + rozmiar w pikselach (bez stanów pośrednich, które migały).</summary>
+        private void SetBoundsPx(double x, double y, double w, double h)
+        {
+            if (_hwnd == IntPtr.Zero) return;
+            Native.SetWindowPos(_hwnd, IntPtr.Zero, (int)Math.Round(x), (int)Math.Round(y),
+                Math.Max(1, (int)Math.Round(w)), Math.Max(1, (int)Math.Round(h)), 0x0004 | 0x0010 | 0x0200); // NOZORDER|NOACTIVATE|NOOWNERZORDER
+        }
+
+        private static WinForms.Screen FindScreen(Settings c)
+        {
+            if (c.CustomPosition)
+            {
+                if (!string.IsNullOrEmpty(c.MonitorName))
+                    foreach (var s in WinForms.Screen.AllScreens)
+                        if (s.DeviceName == c.MonitorName) return s;
+                return WinForms.Screen.FromPoint(new System.Drawing.Point((int)c.AnchorX, (int)c.AnchorY));
+            }
+            return WinForms.Screen.PrimaryScreen;
+        }
+
+        /// <summary>Ustawia okno przy wybranej krawędzi; wyspa rośnie w stronę środka ekranu. Wszystko w pikselach ekranu.</summary>
         public void PlaceWindow()
         {
             try
             {
+                if (_hwnd == IntPtr.Zero) return;
                 var c = App.Config;
-                double d = Dpi, sc = Sc;
-                string edge0 = c.Edge ?? "top";
-                bool vertical = edge0 == "left" || edge0 == "right";
+                if (c.CustomPosition && !c.AnchorPx)
+                {
+                    // stary zapis (w DIP) -> piksele
+                    c.AnchorX *= Dpi;
+                    c.AnchorY *= Dpi;
+                    c.AnchorPx = true;
+                    c.Save();
+                }
+                double sc = Sc;
+                string edge = c.Edge ?? "top";
+                bool vertical = edge == "left" || edge == "right";
                 ApplyOrientation(vertical);
-                double W = (vertical ? 300 : 520) * sc, H = (vertical ? 600 : 380) * sc;
-                Width = W;
-                Height = H;
-                WinForms.Screen scr = c.CustomPosition
-                    ? WinForms.Screen.FromPoint(new System.Drawing.Point((int)(c.AnchorX * d), (int)(c.AnchorY * d)))
-                    : WinForms.Screen.PrimaryScreen;
-                var w = scr.WorkingArea;
-                Rect wa = new Rect(w.X / d, w.Y / d, w.Width / d, w.Height / d);
-                double ax = c.CustomPosition ? c.AnchorX : wa.Left + wa.Width / 2;
-                double ay = c.CustomPosition ? c.AnchorY : wa.Top + wa.Height / 2;
+
+                var scr = FindScreen(c);
+                var wa = scr.WorkingArea;
+                _monScale = Native.MonitorScale(wa.X + wa.Width / 2, wa.Y + wa.Height / 2);
+                double k = sc * _monScale;
+                double W = (vertical ? 300 : 520) * k, H = (vertical ? 600 : 380) * k;
+                double ax = c.CustomPosition ? c.AnchorX : wa.Left + wa.Width / 2.0;
+                double ay = c.CustomPosition ? c.AnchorY : wa.Top + wa.Height / 2.0;
                 double Clamp(double v, double lo, double hi) => hi < lo ? lo : Math.Max(lo, Math.Min(hi, v));
 
-                string edge = c.Edge ?? "top";
                 SetAlign(edge);
+                double x, y;
                 switch (edge)
                 {
-                    case "bottom":
-                        Left = Clamp(ax - W / 2, wa.Left, wa.Right - W);
-                        Top = wa.Bottom - H;
-                        break;
-                    case "left":
-                        Left = wa.Left;
-                        Top = Clamp(ay - H / 2, wa.Top, wa.Bottom - H);
-                        break;
-                    case "topleft": Left = wa.Left; Top = wa.Top; break;
-                    case "topright": Left = wa.Right - W; Top = wa.Top; break;
-                    case "bottomleft": Left = wa.Left; Top = wa.Bottom - H; break;
-                    case "bottomright": Left = wa.Right - W; Top = wa.Bottom - H; break;
-                    case "right":
-                        Left = wa.Right - W;
-                        Top = Clamp(ay - H / 2, wa.Top, wa.Bottom - H);
-                        break;
-                    default:
-                        Left = Clamp(ax - W / 2, wa.Left, wa.Right - W);
-                        Top = wa.Top;
-                        break;
+                    case "bottom": x = Clamp(ax - W / 2, wa.Left, wa.Right - W); y = wa.Bottom - H; break;
+                    case "left": x = wa.Left; y = Clamp(ay - H / 2, wa.Top, wa.Bottom - H); break;
+                    case "right": x = wa.Right - W; y = Clamp(ay - H / 2, wa.Top, wa.Bottom - H); break;
+                    case "topleft": x = wa.Left; y = wa.Top; break;
+                    case "topright": x = wa.Right - W; y = wa.Top; break;
+                    case "bottomleft": x = wa.Left; y = wa.Bottom - H; break;
+                    case "bottomright": x = wa.Right - W; y = wa.Bottom - H; break;
+                    default: x = Clamp(ax - W / 2, wa.Left, wa.Right - W); y = wa.Top; break;
                 }
-                _baseLeft = Left;
-                _baseTop = Top;
+                _baseLeft = x;
+                _baseTop = y;
                 ApplyCrop(null, 0, 0);
                 _settledSince = 0;
                 EnsureLoop();
@@ -1166,14 +1273,11 @@ namespace IslandPlayer
             _crop = crop;
             _cropTw = tw;
             _cropTh = th;
-            double sc = Sc;
+            double sc = Sc, k = sc * _monScale;
             Rect r = crop ?? new Rect(0, 0, Root.Width, Root.Height);
             System.Windows.Controls.Canvas.SetLeft(Root, -r.X * sc);
             System.Windows.Controls.Canvas.SetTop(Root, -r.Y * sc);
-            Left = _baseLeft + r.X * sc;
-            Top = _baseTop + r.Y * sc;
-            Width = r.Width * sc;
-            Height = r.Height * sc;
+            SetBoundsPx(_baseLeft + r.X * k, _baseTop + r.Y * k, r.Width * k, r.Height * k);
         }
 
         /// <summary>Poziomy (góra/dół) albo pionowy (boki ekranu) układ odtwarzacza.</summary>
@@ -1440,8 +1544,8 @@ namespace IslandPlayer
                         Root.Visibility = fs ? Visibility.Hidden : Visibility.Visible;
                         EnsureLoop();
                     }
-                    // wyspa ma być widoczna nad filmem / grą na pełnym ekranie: jeśli coś ją zasłania, wyciągnij ją na wierzch
-                    if (fullscreen && !App.Config.HideInFullscreen && Pill.ActualWidth > 2 && Pill.IsVisible)
+                    // jeśli cokolwiek zasłania wyspę (zwykłe okno albo film na pełnym ekranie, gdy tak ustawiono) - wyciągnij ją na wierzch
+                    if (!_fsHidden && !_moving && Pill.ActualWidth > 2 && Pill.IsVisible && (!fullscreen || !App.Config.HideInFullscreen))
                     {
                         Point c = Pill.PointToScreen(new Point(Pill.ActualWidth / 2, Pill.ActualHeight / 2));
                         if (!Native.IsOnTopAt(_hwnd, (int)c.X, (int)c.Y)) Native.ForceTopmost(_hwnd);

@@ -22,6 +22,24 @@ namespace IslandPlayer
 
         [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT p);
         [DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(POINT p);
+        [DllImport("user32.dll")] public static extern IntPtr MonitorFromPoint(POINT p, uint flags);
+        [DllImport("user32.dll")] public static extern short GetAsyncKeyState(int vKey);
+        [DllImport("shcore.dll")] private static extern int GetDpiForMonitor(IntPtr hmon, int type, out uint dpiX, out uint dpiY);
+
+        /// <summary>Skala monitora (1.0 = 100%, 1.25 = 125%...) dla punktu na ekranie w pikselach.</summary>
+        public static double MonitorScale(int x, int y)
+        {
+            try
+            {
+                IntPtr mon = MonitorFromPoint(new POINT { X = x, Y = y }, 2);
+                if (GetDpiForMonitor(mon, 0, out uint dx, out _) == 0 && dx > 0) return dx / 96.0;
+            }
+            catch { }
+            return 1.0;
+        }
+
+        /// <summary>Czy wciśnięty jest lewy albo prawy przycisk myszy (gdziekolwiek na ekranie).</summary>
+        public static bool AnyMouseButtonDown() => (GetAsyncKeyState(0x01) & 0x8000) != 0 || (GetAsyncKeyState(0x02) & 0x8000) != 0;
         [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
 
         /// <summary>Czy w danym punkcie ekranu (piksele) widać nasze okno, czy coś je zasłania.</summary>
