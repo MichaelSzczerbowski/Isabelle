@@ -501,45 +501,6 @@ namespace IslandPlayer
                 AddRow(d, info);
             }
 
-            // ---- Spotify: prawdziwe linki do utworów ----
-            var sg = Group(p, "SPOTIFY");
-            var sInfo = new StackPanel { Margin = new Thickness(18, 12, 16, 6) };
-            sInfo.Children.Add(new TextBlock { Text = L.T("Linki z próbką piosenki", "Links with a song preview"), FontSize = 14, FontWeight = FontWeights.SemiBold });
-            sInfo.Children.Add(new TextBlock
-            {
-                Text = L.T("Prawy przycisk na „udostępnij” kopiuje link open.spotify.com/track/…, który na Discordzie pokazuje okładkę i próbkę. " +
-                           "Potrzebna jest darmowa aplikacja na developer.spotify.com (wymaga konta Premium): Create app → Redirect URI np. http://127.0.0.1 → Web API → skopiuj Client ID i Client Secret. " +
-                           "Bez tego kopiuje się link do wyszukiwania.",
-                           "Right-clicking “share” copies an open.spotify.com/track/… link that shows the cover and a preview on Discord. " +
-                           "You need a free app on developer.spotify.com (requires Premium): Create app → Redirect URI e.g. http://127.0.0.1 → Web API → copy the Client ID and Client Secret. " +
-                           "Without it a search link is copied."),
-                FontSize = 12, Foreground = TextSub, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0),
-            });
-            AddRow(sg, sInfo);
-            Field(sg, "Client ID", c.SpotifyClientId, false, v => { c.SpotifyClientId = v; c.Save(); });
-            Field(sg, "Client Secret", c.SpotifyClientSecret, true, v => { c.SpotifyClientSecret = v; c.Save(); });
-            var sButtons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(18, 8, 16, 14) };
-            var openDash = PillButton(L.T("Otwórz developer.spotify.com", "Open developer.spotify.com"), false);
-            openDash.Padding = new Thickness(16, 6, 16, 7);
-            openDash.MouseLeftButtonUp += (s, e) =>
-            {
-                try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://developer.spotify.com/dashboard") { UseShellExecute = true }); }
-                catch (Exception ex) { Log.Error(ex); }
-            };
-            sButtons.Children.Add(openDash);
-            var test = PillButton(L.T("Sprawdź", "Test"), true);
-            test.Padding = new Thickness(16, 6, 16, 7);
-            test.Margin = new Thickness(8, 0, 0, 0);
-            test.MouseLeftButtonUp += async (s, e) =>
-            {
-                var label = (TextBlock)test.Child;
-                label.Text = "…";
-                bool ok = SpotifyLinks.Configured && await SpotifyLinks.Test();
-                label.Text = ok ? L.T("Działa ✓", "Works ✓") : L.T("Złe klucze ✗", "Wrong keys ✗");
-            };
-            sButtons.Children.Add(test);
-            sg.Children.Add(sButtons);
-
             // ---- rozmowy ----
             var m = Group(p, L.T("ROZMOWY", "CALLS"));
             Toggle(m, L.T("Ściszaj muzykę podczas rozmowy", "Lower music during calls"),
@@ -780,44 +741,6 @@ namespace IslandPlayer
                 Changed();
             };
             AddRow(rows, Hover(g));
-        }
-
-        /// <summary>Pole tekstowe w szklanym stylu (opcjonalnie ukryte jak hasło).</summary>
-        private static Control Field(StackPanel rows, string title, string value, bool secret, Action<string> set)
-        {
-            var g = new Grid { Margin = new Thickness(18, 8, 16, 8) };
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            g.Children.Add(new TextBlock { Text = title, FontSize = 13.5, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
-            Control box;
-            if (secret)
-            {
-                var pb = new PasswordBox { Password = value ?? "" };
-                pb.PasswordChanged += (s, e) => set(pb.Password.Trim());
-                box = pb;
-            }
-            else
-            {
-                var tb = new TextBox { Text = value ?? "" };
-                tb.TextChanged += (s, e) => set(tb.Text.Trim());
-                box = tb;
-            }
-            box.Background = Brushes.Transparent;
-            box.Foreground = Brushes.White;
-            box.BorderThickness = new Thickness(0);
-            box.FontSize = 13;
-            box.FontFamily = new FontFamily("Cascadia Mono, Consolas");
-            box.VerticalContentAlignment = VerticalAlignment.Center;
-            if (box is TextBox t2) t2.CaretBrush = Brushes.White; else ((PasswordBox)box).CaretBrush = Brushes.White;
-            var frame = new Border
-            {
-                Background = Hex("#14FFFFFF"), CornerRadius = new CornerRadius(10), Padding = new Thickness(10, 6, 10, 6),
-                BorderBrush = Hairline, BorderThickness = new Thickness(1), Child = box,
-            };
-            Grid.SetColumn(frame, 1);
-            g.Children.Add(frame);
-            rows.Children.Add(g);
-            return box;
         }
 
         private static Border Hover(FrameworkElement content)

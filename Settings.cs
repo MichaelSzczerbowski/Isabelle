@@ -55,9 +55,6 @@ namespace IslandPlayer
         public bool ClickToPin { get; set; }
         /// <summary>Najechanie myszką nie otwiera odtwarzacza - tylko kliknięcie.</summary>
         public bool ClickToOpen { get; set; }
-        /// <summary>Własna aplikacja Spotify (developer.spotify.com) - do prawdziwych linków do utworów.</summary>
-        public string SpotifyClientId { get; set; } = "";
-        public string SpotifyClientSecret { get; set; } = "";
         /// <summary>Szybkie przesunięcie wyspy w bok (myszą albo dwoma palcami na touchpadzie) zmienia utwór.</summary>
         public bool Gestures { get; set; } = true;
         // ---- personalizacja ----

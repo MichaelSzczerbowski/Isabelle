@@ -116,11 +116,6 @@ namespace IslandPlayer
             PrevBtn.Click += (s, e) => _media.Previous();
             AppBtn.Click += (s, e) => _media.CycleApp();
             LyricsBtn.Click += (s, e) => ToggleLyrics();
-            ShareBtn.Click += (s, e) =>
-            {
-                if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) ShareLink(); else ShareNowPlaying(false);
-            };
-            ShareBtn.MouseRightButtonUp += (s, e) => { e.Handled = true; ShareLink(); };
             foreach (var v in new FrameworkElement[] { CompactView, ToastView, ExpandedView, IdleExpandedView, CompactVView, ToastVView })
                 v.RenderTransform = _swipeShift;
             OpenSpotifyBtn.Click += (s, e) => OpenSpotify();
@@ -314,8 +309,6 @@ namespace IslandPlayer
             IdleSub.Text = L.T("Włącz muzykę w dowolnej aplikacji", "Play music in any app");
             ToastLabel.Text = ToastVLabel.Text = L.T("TERAZ GRA", "NOW PLAYING");
             LyricsBtn.ToolTip = L.T("Tekst piosenki", "Lyrics");
-            ShareBtn.ToolTip = L.T("Kliknij: kopiuj kartę (obrazek)\nPrawy przycisk: kopiuj link do utworu",
-                                   "Click: copy the share card (image)\nRight-click: copy a link to the song");
             AppBtn.ToolTip = L.T("Przełącz odtwarzacz", "Switch player");
             if (_snap != null) AppText.Text = MediaService.PrettyAppName(_snap.AppId);
         }
@@ -349,7 +342,6 @@ namespace IslandPlayer
                         if (_expanded) _collapseTimer.Stop();
                         EnsureLoop();
                         break;
-                    case 7: ShareNowPlaying(true); break;
                     case 5:
                     case 6:
                         if (_audio != null)
@@ -1203,61 +1195,6 @@ namespace IslandPlayer
                     FillBehavior = FillBehavior.Stop,
                 });
             _swipeShift.X = 0;
-        }
-
-        // ================= karta do udostępnienia =================
-        private DispatcherTimer _shareTimer;
-
-        /// <summary>Kopiuje klikalny link do utworu.</summary>
-        private async void ShareLink()
-        {
-            var snap = _snap;
-            if (snap == null || string.IsNullOrWhiteSpace(snap.Title)) return;
-            // prawdziwy link do utworu (z próbką na Discordzie), a gdy się nie da - link do wyszukiwania
-            string url = await SpotifyLinks.FindTrack(snap.Title, snap.Artist)
-                         ?? ShareCard.Link(snap.AppId, snap.Title, snap.Artist).url;
-            ShareCard.CopyText(url);
-            ShareConfirm(false, L.T("SKOPIOWANO LINK", "LINK COPIED"));
-        }
-
-        private void ShareNowPlaying(bool fromHotkey)
-        {
-            var snap = _snap;
-            if (snap == null || string.IsNullOrWhiteSpace(snap.Title)) return;
-            try
-            {
-                var card = ShareCard.Render(_cover, snap.Title, snap.Artist, _cover != null ? _coverAccent : _accent);
-                ShareCard.SaveAndCopy(card, snap.Title, snap.Artist);
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex);
-                return;
-            }
-
-            ShareConfirm(fromHotkey, L.T("SKOPIOWANO KARTĘ", "CARD COPIED"));
-        }
-
-        /// <summary>Potwierdzenie: ptaszek na przycisku, a ze skrótu (przy zamkniętej wyspie) krótki dymek.</summary>
-        private void ShareConfirm(bool fromHotkey, string label)
-        {
-            ShareIcon.Data = Geometry.Parse("M0,6 L2,4 L5,7 L10,1 L12,3 L5,11 Z");
-            if (fromHotkey && !_expanded)
-            {
-                ToastLabel.Text = ToastVLabel.Text = label;
-                _toastKind = "track";
-                _toastUntil = DateTime.UtcNow.AddSeconds(2.5);
-                EnsureLoop();
-            }
-            _shareTimer?.Stop();
-            _shareTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2.6) };
-            _shareTimer.Tick += (s, e) =>
-            {
-                _shareTimer.Stop();
-                ShareIcon.Data = Geometry.Parse("M6,0 L10.5,4.5 H7.2 V9 H4.8 V4.5 H1.5 Z M0,7.5 H2 V10 H10 V7.5 H12 V12 H0 Z");
-                ToastLabel.Text = ToastVLabel.Text = L.T("TERAZ GRA", "NOW PLAYING");
-            };
-            _shareTimer.Start();
         }
 
         private void PillDown(object sender, MouseButtonEventArgs e)

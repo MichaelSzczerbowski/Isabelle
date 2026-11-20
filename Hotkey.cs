@@ -16,7 +16,6 @@ namespace IslandPlayer
             (4, "show", "Pokaż / schowaj odtwarzacz", "Show / hide player", "Ctrl+Alt+I"),
             (5, "volup", "Głośniej", "Volume up", "Ctrl+Alt+Up"),
             (6, "voldown", "Ciszej", "Volume down", "Ctrl+Alt+Down"),
-            (7, "share", "Karta do udostępnienia", "Share card", "Ctrl+Alt+S"),
         };
 
         public static string Default(string key)
