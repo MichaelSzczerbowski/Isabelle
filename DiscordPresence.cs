@@ -16,6 +16,8 @@ namespace IslandPlayer
     {
         /// <summary>Application ID z https://discord.com/developers/applications (aplikacja "Isabelle").</summary>
         public const string ClientId = "1573360659687678213";
+        private const string ServerUrl = "https://discord.gg/ueUYTw8ry6";
+        private const string ServerText = "discord.gg/ueUYTw8ry6";
         public static bool Configured => !ClientId.StartsWith("DISCORD_", StringComparison.Ordinal);
 
         private NamedPipeClientStream _pipe;
@@ -76,7 +78,10 @@ namespace IslandPlayer
                 details = Fit(s.Title, 128),
                 state = Fit(string.IsNullOrWhiteSpace(line) ? s.Artist : "🎤 " + line, 128),
                 timestamps,
-                assets = new { large_image = "logo", large_text = Fit(s.Artist, 128) },
+                // trzecia linijka: wykonawca, gdy w statusie jest tekst piosenki - inaczej link do naszego serwera
+                assets = new { large_image = "logo", large_text = Fit(string.IsNullOrWhiteSpace(line) ? ServerText : s.Artist, 128) },
+                // klikalny przycisk (widzą go inni - na własnym profilu Discord go ukrywa)
+                buttons = new[] { new { label = "Serwer Isabelle", url = ServerUrl } },
             };
             return JsonSerializer.Serialize(new
             {
