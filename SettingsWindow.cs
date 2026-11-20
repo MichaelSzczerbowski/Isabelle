@@ -503,16 +503,9 @@ namespace IslandPlayer
             // ---- tapeta ----
             var w = Group(p, L.T("PULPIT", "DESKTOP"));
             Toggle(w, L.T("Tapeta z okładki", "Album wallpaper"),
-                L.T("podczas słuchania tapeta to rozmyta okładka; po minucie ciszy wraca Twoja tapeta", "while listening the wallpaper is the blurred cover; your wallpaper comes back after a minute of silence"),
+                L.T("podczas słuchania tapeta mieni się kolorami okładki; po minucie ciszy wraca Twoja tapeta", "while listening the wallpaper shows the cover's colors; your wallpaper comes back after a minute of silence"),
                 c.AlbumWallpaper, v => c.AlbumWallpaper = v);
 
-            // ---- krawędzie ----
-            Segment(w, L.T("Świecące krawędzie ekranu", "Glowing screen edges"), L.T("poświata w kolorze okładki pulsująca z muzyką", "a glow in the cover's color that pulses with the music"),
-                new[] { ("off", L.T("Wył.", "Off")), ("fullscreen", L.T("Pełny ekran", "Fullscreen")), ("always", L.T("Zawsze", "Always")) },
-                c.EdgeGlow, v => c.EdgeGlow = v);
-            Segment(w, L.T("Siła poświaty", "Glow strength"), null,
-                new[] { ("low", L.T("Słaba", "Low")), ("mid", L.T("Średnia", "Medium")), ("high", L.T("Mocna", "High")) },
-                c.EdgeIntensity, v => c.EdgeIntensity = v);
             return p;
         }
 

@@ -105,57 +105,105 @@ namespace IslandPlayer
             else Task.Run(Do);
         }
 
+        /// <summary>
+        /// Tapeta "w kolorach okładki": bez samego obrazka (twarze, napisy), tylko miękkie plamy jej głównych barw.
+        /// </summary>
         private static BitmapSource Render(BitmapSource cover, string title, string artist, int w, int h)
         {
-            // 1) rozmyte tło liczone w małej rozdzielczości (szybko), potem rozciągnięte - wygląda jak mocne rozmycie
-            int sw = Math.Max(64, w / 10), sh = Math.Max(36, h / 10);
-            var small = new Grid { Width = sw, Height = sh, ClipToBounds = true, Background = Brushes.Black };
-            small.Children.Add(new Image
+            var pal = Palette(cover, 4);
+            Color baseColor = Shade(pal[0], 0.22);
+
+            // liczone w małej rozdzielczości i rozciągnięte - bardzo miękkie przejścia, szybkie liczenie
+            int sw = Math.Max(96, w / 12), sh = Math.Max(54, h / 12);
+            var small = new Grid { Width = sw, Height = sh, ClipToBounds = true, Background = new SolidColorBrush(baseColor) };
+            var spots = new (double x, double y, double size)[]
             {
-                Source = cover, Stretch = Stretch.UniformToFill, Width = sw * 1.3, Height = sh * 1.3,
-                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-                Effect = new BlurEffect { Radius = Math.Max(8, sw / 18.0), KernelType = KernelType.Gaussian },
-            });
+                (0.18, 0.22, 0.95), (0.82, 0.28, 0.85), (0.30, 0.85, 0.80), (0.80, 0.82, 0.95),
+            };
+            var canvas = new Canvas { Width = sw, Height = sh };
+            for (int i = 0; i < spots.Length; i++)
+            {
+                double d = sh * spots[i].size;
+                var e = new System.Windows.Shapes.Ellipse
+                {
+                    Width = d * 1.4, Height = d, Opacity = 0.9,
+                    Fill = new SolidColorBrush(Soften(pal[i % pal.Length])),
+                };
+                Canvas.SetLeft(e, sw * spots[i].x - d * 0.7);
+                Canvas.SetTop(e, sh * spots[i].y - d * 0.5);
+                canvas.Children.Add(e);
+            }
+            canvas.Effect = new BlurEffect { Radius = Math.Max(10, sh / 3.0), KernelType = KernelType.Gaussian };
+            small.Children.Add(canvas);
             small.Measure(new Size(sw, sh));
             small.Arrange(new Rect(0, 0, sw, sh));
             var smallBmp = new RenderTargetBitmap(sw, sh, 96, 96, PixelFormats.Pbgra32);
             smallBmp.Render(small);
 
-            // 2) pełna tapeta
-            var root = new Grid { Width = w, Height = h, Background = Brushes.Black };
+            var root = new Grid { Width = w, Height = h, Background = new SolidColorBrush(baseColor) };
             var bg = new Image { Source = smallBmp, Stretch = Stretch.Fill };
             RenderOptions.SetBitmapScalingMode(bg, BitmapScalingMode.HighQuality);
             root.Children.Add(bg);
-            root.Children.Add(new Border { Background = new SolidColorBrush(Color.FromArgb(0x70, 0, 0, 0)) });
-
-            double size = h * 0.36;
-            var center = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            var art = new Border
-            {
-                Width = size, Height = size, CornerRadius = new CornerRadius(size * 0.07),
-                Background = new ImageBrush(cover) { Stretch = Stretch.UniformToFill },
-                Effect = new DropShadowEffect { BlurRadius = size * 0.18, ShadowDepth = size * 0.03, Opacity = 0.55, Color = Colors.Black },
-            };
-            center.Children.Add(art);
-            center.Children.Add(new TextBlock
-            {
-                Text = title ?? "", Foreground = Brushes.White, FontSize = h * 0.032, FontWeight = FontWeights.SemiBold,
-                FontFamily = new FontFamily("Segoe UI Variable Display, Segoe UI"), HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, h * 0.03, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = w * 0.6,
-            });
-            center.Children.Add(new TextBlock
-            {
-                Text = artist ?? "", Foreground = new SolidColorBrush(Color.FromArgb(0xB3, 255, 255, 255)), FontSize = h * 0.022,
-                FontFamily = new FontFamily("Segoe UI Variable Display, Segoe UI"), HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, h * 0.006, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = w * 0.6,
-            });
-            root.Children.Add(center);
+            // delikatna winieta - ikony na pulpicie zostają czytelne
+            var vignette = new RadialGradientBrush(Color.FromArgb(0, 0, 0, 0), Color.FromArgb(0x66, 0, 0, 0)) { RadiusX = 0.75, RadiusY = 0.75 };
+            root.Children.Add(new Border { Background = vignette });
             root.Measure(new Size(w, h));
             root.Arrange(new Rect(0, 0, w, h));
             var full = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
             full.Render(root);
             full.Freeze();
             return full;
+        }
+
+        /// <summary>Główne kolory okładki (najczęstsze i najbardziej wyraziste, różne od siebie).</summary>
+        private static Color[] Palette(BitmapSource cover, int count)
+        {
+            var src = new FormatConvertedBitmap(cover, PixelFormats.Bgra32, null, 0);
+            double sc = 32.0 / Math.Max(src.PixelWidth, src.PixelHeight);
+            var tb = new TransformedBitmap(src, new ScaleTransform(sc, sc));
+            int pw = tb.PixelWidth, ph = tb.PixelHeight, stride = pw * 4;
+            var px = new byte[stride * ph];
+            tb.CopyPixels(px, stride, 0);
+
+            // kubełki 4 bity na kanał, punktacja = ilość * (0.35 + nasycenie)
+            var score = new System.Collections.Generic.Dictionary<int, double>();
+            var sum = new System.Collections.Generic.Dictionary<int, (double r, double g, double b, int n)>();
+            for (int i = 0; i < px.Length; i += 4)
+            {
+                byte b = px[i], g = px[i + 1], r = px[i + 2];
+                int key = (r >> 4) << 8 | (g >> 4) << 4 | (b >> 4);
+                double max = Math.Max(r, Math.Max(g, b)) / 255.0, min = Math.Min(r, Math.Min(g, b)) / 255.0;
+                double sat = max <= 0 ? 0 : (max - min) / max;
+                score[key] = (score.TryGetValue(key, out var v) ? v : 0) + 0.35 + sat;
+                var t = sum.TryGetValue(key, out var x) ? x : (0, 0, 0, 0);
+                sum[key] = (t.r + r, t.g + g, t.b + b, t.n + 1);
+            }
+            var keys = new System.Collections.Generic.List<int>(score.Keys);
+            keys.Sort((p, q) => score[q].CompareTo(score[p]));
+            var result = new System.Collections.Generic.List<Color>();
+            foreach (int k in keys)
+            {
+                var t = sum[k];
+                var c = Color.FromRgb((byte)(t.r / t.n), (byte)(t.g / t.n), (byte)(t.b / t.n));
+                bool distinct = true;
+                foreach (var o in result)
+                    if (Math.Abs(o.R - c.R) + Math.Abs(o.G - c.G) + Math.Abs(o.B - c.B) < 90) { distinct = false; break; }
+                if (distinct) result.Add(c);
+                if (result.Count == count) break;
+            }
+            while (result.Count < count) result.Add(result.Count > 0 ? Shade(result[0], 0.6) : Color.FromRgb(40, 40, 48));
+            return result.ToArray();
+        }
+
+        /// <summary>Przyciemnia kolor (k = 0..1).</summary>
+        private static Color Shade(Color c, double k) => Color.FromRgb((byte)(c.R * k), (byte)(c.G * k), (byte)(c.B * k));
+
+        /// <summary>Kolor na tapetę: nie za jasny (ikony mają być czytelne) i nie szary.</summary>
+        private static Color Soften(Color c)
+        {
+            double max = Math.Max(c.R, Math.Max(c.G, c.B));
+            double k = max > 200 ? 200 / max : 1;
+            return Color.FromRgb((byte)(c.R * k), (byte)(c.G * k), (byte)(c.B * k));
         }
     }
 }

@@ -81,10 +81,6 @@ namespace IslandPlayer
         public string OriginalWallpaper { get; set; }
         public string OriginalWallpaperStyle { get; set; }
         public string OriginalTileWallpaper { get; set; }
-        /// <summary>off / always / fullscreen</summary>
-        public string EdgeGlow { get; set; } = "off";
-        /// <summary>low / mid / high</summary>
-        public string EdgeIntensity { get; set; } = "mid";
 
         /// <summary>auto / pl / en</summary>
         public string Language { get; set; } = "auto";

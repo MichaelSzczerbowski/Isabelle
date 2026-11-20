@@ -273,7 +273,6 @@ namespace IslandPlayer
                 Native.SetVolumeOsdVisible(true);
                 _overlay.Stop();
                 _discord.Dispose();
-                _edges?.Close();
                 if (App.Config.WallpaperActive) WallpaperService.Restore(wait: true);
                 if (_ducked && _audio != null) _audio.Volume = _duckSaved;
                 _audio?.Dispose();
@@ -864,16 +863,6 @@ namespace IslandPlayer
 
             if (CompactView.Opacity > 0) CompactBars.Update(t, playing, _peakS, _peakMax);
             if (CompactVView.Opacity > 0) CompactVBars.Update(t, playing, _peakS, _peakMax);
-            if (_edges != null)
-            {
-                // świecące krawędzie: zawsze albo tylko przy pełnym ekranie, jasność z poziomu muzyki
-                var cfgE = App.Config;
-                bool edgeOn = has && playing && (cfgE.EdgeGlow == "always" || (cfgE.EdgeGlow == "fullscreen" && _fgFullscreen));
-                double strength = cfgE.EdgeIntensity == "low" ? 0.45 : cfgE.EdgeIntensity == "high" ? 1.0 : 0.7;
-                double pulse = _peakMax > 0.02 ? Math.Min(1, _peakS / Math.Max(0.05, _peakMax * 0.8)) : 0.5;
-                _edges.SetColor(_accent);
-                _edges.Update(edgeOn ? strength * (0.3 + 0.7 * pulse) : 0, steps);
-            }
             if (DotView.Opacity > 0)
             {
                 // kropka świeci kolorem okładki i pulsuje z muzyką; szara, gdy nic nie gra
@@ -958,8 +947,7 @@ namespace IslandPlayer
                 _settledSince = 0;
             }
             _lowFps = croppable;
-            needed = needed || (croppable && _crop == null) || st || StartupView.Opacity > 0 ||
-                     (_edges != null && (_edges.Visible || (has && playing)));
+            needed = needed || (croppable && _crop == null) || st || StartupView.Opacity > 0;
 
             if (!needed) StopLoop();
         }
@@ -1300,7 +1288,6 @@ namespace IslandPlayer
         // ================= dodatki =================
         private readonly OverlayServer _overlay = new OverlayServer();
         private readonly DiscordPresence _discord = new DiscordPresence();
-        private EdgeGlow _edges;
         private bool _fgFullscreen;
         private readonly DispatcherTimer _wallTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.5) };
         private DateTime _lastPlayingAt = DateTime.UtcNow;
@@ -1330,18 +1317,6 @@ namespace IslandPlayer
             else _overlay.Stop();
             if (!c.DiscordEnabled) _discord.Clear();
 
-            if (c.EdgeGlow != "off")
-            {
-                if (_edges == null) _edges = new EdgeGlow();
-                PlaceEdges();
-                _edges.SetColor(_accent);
-            }
-            else if (_edges != null)
-            {
-                _edges.Close();
-                _edges = null;
-            }
-
             if (!c.AlbumWallpaper && c.WallpaperActive) WallpaperService.Restore();
             else if (c.AlbumWallpaper && _cover != null && IsPlaying) { _wallTimer.Stop(); _wallTimer.Start(); }
 
@@ -1349,14 +1324,6 @@ namespace IslandPlayer
         }
 
         public string OverlayStatus => _overlay.Running ? "http://localhost:" + _overlay.Port + "/" : _overlay.Error;
-
-        private void PlaceEdges()
-        {
-            if (_edges == null || _hwnd == IntPtr.Zero) return;
-            var scr = WinForms.Screen.FromHandle(_hwnd).Bounds;
-            double d = Dpi;
-            _edges.Place(new Rect(scr.X / d, scr.Y / d, scr.Width / d, scr.Height / d));
-        }
 
         /// <summary>Publikuje stan dla nakładki OBS i Discorda.</summary>
         private void PublishState()
@@ -1495,7 +1462,6 @@ namespace IslandPlayer
                 if (IsPlaying) _lastPlayingAt = DateTime.UtcNow;
                 // tapeta wraca po minucie ciszy
                 if (cfg.WallpaperActive && (DateTime.UtcNow - _lastPlayingAt).TotalSeconds > 60) WallpaperService.Restore();
-                if (_edges != null && _edges.Visible && _fgFullscreen && _slowTicks % 4 == 0) _edges.BringToTop();
             }
             catch (Exception ex)
             {
