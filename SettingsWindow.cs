@@ -212,6 +212,8 @@ namespace IslandPlayer
                 try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://discord.gg/ueUYTw8ry6") { UseShellExecute = true }); }
                 catch (Exception ex) { Log.Error(ex); }
             };
+            invite.Visibility = App.Config.ShowDiscordInvite ? Visibility.Visible : Visibility.Collapsed;
+            _invite = invite;
             footer.Children.Add(invite);
             var quit = new TextBlock
             {
@@ -485,6 +487,8 @@ namespace IslandPlayer
             AddRow(rows, sp);
         }
 
+        private Border _invite;
+
         private StackPanel PageExtras()
         {
             var c = App.Config;
@@ -526,6 +530,13 @@ namespace IslandPlayer
 
             // ---- Discord ----
             var d = Group(p, "DISCORD");
+            Toggle(d, L.T("Przycisk „Dołącz do Discorda”", "“Join our Discord” button"),
+                L.T("zaproszenie na serwer Isabelle w menu ustawień", "invite to the Isabelle server in the settings menu"),
+                c.ShowDiscordInvite, v =>
+                {
+                    c.ShowDiscordInvite = v;
+                    if (_invite != null) _invite.Visibility = v ? Visibility.Visible : Visibility.Collapsed;
+                });
             if (DiscordPresence.Configured)
             {
                 Toggle(d, L.T("Status na Discordzie", "Discord status"), L.T("„Słucha…” z okładką i czasem utworu", "“Listening to…” with time left"),

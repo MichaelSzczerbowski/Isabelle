@@ -55,6 +55,8 @@ namespace IslandPlayer
         public bool ClickToPin { get; set; }
         /// <summary>Najechanie myszką nie otwiera odtwarzacza - tylko kliknięcie.</summary>
         public bool ClickToOpen { get; set; }
+        /// <summary>Przycisk „Dołącz do Discorda” w ustawieniach.</summary>
+        public bool ShowDiscordInvite { get; set; } = true;
         /// <summary>Wyrównywanie głośności między utworami (tylko głośność odtwarzacza).</summary>
         public bool NormalizeVolume { get; set; }
         /// <summary>Wyciszenie końca utworu i rozjaśnienie początku następnego.</summary>
