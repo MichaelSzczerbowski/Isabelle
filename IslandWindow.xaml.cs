@@ -116,6 +116,7 @@ namespace IslandPlayer
             PrevBtn.Click += (s, e) => _media.Previous();
             AppBtn.Click += (s, e) => _media.CycleApp();
             LyricsBtn.Click += (s, e) => ToggleLyrics();
+            FullBtn.Click += (s, e) => FullscreenPlayer.Toggle();
             ArtHost.Cursor = Cursors.Hand;
             ArtHost.MouseLeftButtonDown += (s, e) => { if (_expanded && _snap != null) e.Handled = true; };
             ArtHost.MouseLeftButtonUp += (s, e) =>
@@ -317,6 +318,7 @@ namespace IslandPlayer
             IdleSub.Text = L.T("Włącz muzykę w dowolnej aplikacji", "Play music in any app");
             ToastLabel.Text = ToastVLabel.Text = L.T("TERAZ GRA", "NOW PLAYING");
             LyricsBtn.ToolTip = L.T("Tekst piosenki", "Lyrics");
+            FullBtn.ToolTip = L.T("Pełny ekran", "Full screen");
             AppBtn.ToolTip = L.T("Przełącz odtwarzacz", "Switch player");
             if (_snap != null) AppText.Text = MediaService.PrettyAppName(_snap.AppId);
         }
@@ -350,6 +352,7 @@ namespace IslandPlayer
                         if (_expanded) _collapseTimer.Stop();
                         EnsureLoop();
                         break;
+                    case 7: FullscreenPlayer.Toggle(); break;
                     case 5:
                     case 6:
                         if (_audio != null)
@@ -577,6 +580,28 @@ namespace IslandPlayer
             else
                 _media.PlayPause();
             EnsureLoop();
+        }
+
+        // ================= dla trybu pełnoekranowego =================
+        public MediaSnapshot Snapshot => _snap;
+        public BitmapSource Cover => _cover;
+        public IReadOnlyList<LyricLine> Lyrics => _lyrics;
+        public string LyricsKey => _lyricsKey;
+        public double Position => DisplayPosition();
+        public bool Playing => IsPlaying;
+        public void TogglePlay() => PlayPause();
+        public void Next() => _media.Next();
+        public void Previous() => _media.Previous();
+        public void SeekTo(double seconds)
+        {
+            if (_snap == null) return;
+            _dragPos = _snap.Duration > 0 ? Math.Clamp(seconds, 0, _snap.Duration) : Math.Max(0, seconds);
+            SendSeek(true);
+        }
+        /// <summary>Wczytuje tekst piosenki nawet przy wyłączonym tekście w wyspie.</summary>
+        public void EnsureLyrics()
+        {
+            if (_snap != null && _lyricsKey != _snap.Key) LoadLyrics();
         }
 
         // ================= informacje o utworze =================
@@ -1798,7 +1823,7 @@ namespace IslandPlayer
                 {
                     bool fullscreen = Native.IsForegroundFullscreen(_hwnd);
                     _fgFullscreen = fullscreen;
-                    bool fs = App.Config.HideInFullscreen && fullscreen;
+                    bool fs = (App.Config.HideInFullscreen && fullscreen) || FullscreenPlayer.IsOpen;
                     if (fs != _fsHidden)
                     {
                         _fsHidden = fs;

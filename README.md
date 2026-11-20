@@ -20,6 +20,7 @@ A tiny black pill at the top of your screen that shows what's playing and grows 
 | 📊 | Animated bars and cover that react to the music | Słupki i okładka reagujące na muzykę |
 | ⏩ | Instant seeking — drag the progress bar | Natychmiastowe przewijanie |
 | ℹ️ | Click the cover for track info — album, year, genre, track number | Kliknij okładkę: album, rok, gatunek, numer utworu |
+| 🖥️ | **Full-screen "Now Playing"** mode with big cover and live lyrics (`Ctrl+Alt+F`) | **Tryb pełnoekranowy** z dużą okładką i tekstem na żywo |
 | 👆 | **Gestures** — flick the island sideways or swipe with two fingers on a touchpad to change tracks | **Gesty** — szybkie przesunięcie wyspy w bok (lub dwa palce na touchpadzie) zmienia utwór |
 | 🔊 | Mouse-wheel volume + volume indicator in the island (replaces the Windows OSD) | Głośność kółkiem myszy i wskaźnik w wyspie |
 | 🌙 | Smooth fade on pause / resume | Płynne ściszanie przy pauzie |
