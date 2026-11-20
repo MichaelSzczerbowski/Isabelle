@@ -116,6 +116,9 @@ namespace IslandPlayer
             PrevBtn.Click += (s, e) => _media.Previous();
             AppBtn.Click += (s, e) => _media.CycleApp();
             LyricsBtn.Click += (s, e) => ToggleLyrics();
+            ShareBtn.Click += (s, e) => ShareNowPlaying(false);
+            foreach (var v in new FrameworkElement[] { CompactView, ToastView, ExpandedView, IdleExpandedView, CompactVView, ToastVView })
+                v.RenderTransform = _swipeShift;
             OpenSpotifyBtn.Click += (s, e) => OpenSpotify();
 
             SeekArea.MouseLeftButtonDown += SeekDown;
@@ -163,7 +166,7 @@ namespace IslandPlayer
         /// "isabelle" pisane jak "hello" w iPhonie: jedna ciągła linia rysowana piórem od lewej do prawej,
         /// a na końcu pojawia się kropka nad „i”.
         /// </summary>
-        private const string HandwritingPath = "M 20 66 C 26 64, 30 56, 32 48 C 31 58, 30 66, 34 70 C 38 72, 44 64, 48 56 C 50 52, 52 48, 54 47 C 58 52, 60 60, 56 67 C 53 72, 46 70, 47 66 C 52 70, 62 68, 68 60 C 72 52, 80 46, 86 50 C 78 46, 68 56, 72 65 C 76 72, 86 64, 90 50 C 88 60, 88 68, 93 70 C 98 71, 102 64, 105 58 C 110 44, 116 22, 110 16 C 104 12, 100 26, 102 40 C 103 52, 104 62, 106 70 C 108 60, 116 50, 124 56 C 129 62, 122 72, 112 68 C 118 69, 126 64, 132 58 C 140 56, 146 49, 141 46 C 134 45, 128 58, 133 66 C 137 72, 147 68, 154 60 C 160 48, 166 26, 160 18 C 155 13, 150 26, 152 40 C 153 54, 154 64, 159 69 C 163 71, 168 64, 172 58 C 178 48, 184 26, 178 18 C 173 13, 168 26, 170 40 C 171 54, 172 64, 177 69 C 181 71, 186 64, 190 58 C 198 56, 204 49, 199 46 C 192 45, 186 58, 191 66 C 195 72, 205 70, 214 60";
+        internal const string HandwritingPath = "M 20 66 C 26 64, 30 56, 32 48 C 31 58, 30 66, 34 70 C 38 72, 44 64, 48 56 C 50 52, 52 48, 54 47 C 58 52, 60 60, 56 67 C 53 72, 46 70, 47 66 C 52 70, 62 68, 68 60 C 72 52, 80 46, 86 50 C 78 46, 68 56, 72 65 C 76 72, 86 64, 90 50 C 88 60, 88 68, 93 70 C 98 71, 102 64, 105 58 C 110 44, 116 22, 110 16 C 104 12, 100 26, 102 40 C 103 52, 104 62, 106 70 C 108 60, 116 50, 124 56 C 129 62, 122 72, 112 68 C 118 69, 126 64, 132 58 C 140 56, 146 49, 141 46 C 134 45, 128 58, 133 66 C 137 72, 147 68, 154 60 C 160 48, 166 26, 160 18 C 155 13, 150 26, 152 40 C 153 54, 154 64, 159 69 C 163 71, 168 64, 172 58 C 178 48, 184 26, 178 18 C 173 13, 168 26, 170 40 C 171 54, 172 64, 177 69 C 181 71, 186 64, 190 58 C 198 56, 204 49, 199 46 C 192 45, 186 58, 191 66 C 195 72, 205 70, 214 60";
 
         private void AnimateHandwriting()
         {
@@ -307,6 +310,7 @@ namespace IslandPlayer
             IdleSub.Text = L.T("Włącz muzykę w dowolnej aplikacji", "Play music in any app");
             ToastLabel.Text = ToastVLabel.Text = L.T("TERAZ GRA", "NOW PLAYING");
             LyricsBtn.ToolTip = L.T("Tekst piosenki", "Lyrics");
+            ShareBtn.ToolTip = L.T("Karta do udostępnienia (kopiuje obrazek)", "Share card (copies an image)");
             AppBtn.ToolTip = L.T("Przełącz odtwarzacz", "Switch player");
             if (_snap != null) AppText.Text = MediaService.PrettyAppName(_snap.AppId);
         }
@@ -340,6 +344,7 @@ namespace IslandPlayer
                         if (_expanded) _collapseTimer.Stop();
                         EnsureLoop();
                         break;
+                    case 7: ShareNowPlaying(true); break;
                     case 5:
                     case 6:
                         if (_audio != null)
@@ -349,6 +354,11 @@ namespace IslandPlayer
                         }
                         break;
                 }
+                handled = true;
+            }
+            else if (msg == WM_MOUSEHWHEEL && App.Config.Gestures)
+            {
+                OnHorizontalWheel((short)((wParam.ToInt64() >> 16) & 0xFFFF));
                 handled = true;
             }
             return IntPtr.Zero;
@@ -1143,10 +1153,97 @@ namespace IslandPlayer
         private double Dpi => Math.Max(0.5, VisualTreeHelper.GetDpi(this).DpiScaleX);
         private double Sc => Math.Clamp(App.Config.Scale, 0.7, 1.6);
 
+        // ================= gesty =================
+        private const int WM_MOUSEHWHEEL = 0x020E;
+        private readonly TranslateTransform _swipeShift = new TranslateTransform();
+        private DateTime _downAt;
+        private bool _swiping;
+        private int _hAcc;
+        private DateTime _hLast, _hCooldown;
+
+        /// <summary>Przewijanie w poziomie: dwa palce na touchpadzie albo przechylenie kółka myszy.</summary>
+        private void OnHorizontalWheel(int delta)
+        {
+            var now = DateTime.UtcNow;
+            if (now < _hCooldown) return;
+            if ((now - _hLast).TotalMilliseconds > 350) _hAcc = 0;
+            _hLast = now;
+            _hAcc += delta;
+            if (Math.Abs(_hAcc) >= 240)
+            {
+                int dir = _hAcc > 0 ? 1 : -1;
+                _hAcc = 0;
+                _hCooldown = now.AddMilliseconds(700);
+                SwipeTrack(dir);
+                return;
+            }
+            _swipeShift.BeginAnimation(TranslateTransform.XProperty, null);
+            _swipeShift.X = -Math.Sign(_hAcc) * Math.Min(14, Math.Abs(_hAcc) / 18.0);
+        }
+
+        /// <summary>dir = 1 następny utwór, -1 poprzedni. Nowa zawartość wjeżdża z przeciwnej strony.</summary>
+        private void SwipeTrack(int dir)
+        {
+            if (dir > 0) _media.Next(); else _media.Previous();
+            SpringBack(dir);
+        }
+
+        private void SpringBack(int dir)
+        {
+            double from = dir == 0 ? _swipeShift.X : dir * 22;
+            _swipeShift.BeginAnimation(TranslateTransform.XProperty,
+                new DoubleAnimation(from, 0, TimeSpan.FromSeconds(dir == 0 ? 0.22 : 0.38))
+                {
+                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+                    FillBehavior = FillBehavior.Stop,
+                });
+            _swipeShift.X = 0;
+        }
+
+        // ================= karta do udostępnienia =================
+        private DispatcherTimer _shareTimer;
+
+        private void ShareNowPlaying(bool fromHotkey)
+        {
+            var snap = _snap;
+            if (snap == null || string.IsNullOrWhiteSpace(snap.Title)) return;
+            try
+            {
+                var card = ShareCard.Render(_cover, snap.Title, snap.Artist, snap.PositionNow(DateTime.UtcNow), snap.Duration, _accent);
+                ShareCard.SaveAndCopy(card, snap.Title, snap.Artist);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex);
+                return;
+            }
+
+            // potwierdzenie: ptaszek na przycisku, a ze skrótu (przy zamkniętej wyspie) krótki dymek
+            ShareIcon.Data = Geometry.Parse("M0,6 L2,4 L5,7 L10,1 L12,3 L5,11 Z");
+            if (fromHotkey && !_expanded)
+            {
+                ToastLabel.Text = ToastVLabel.Text = L.T("SKOPIOWANO KARTĘ", "CARD COPIED");
+                _toastKind = "track";
+                _toastUntil = DateTime.UtcNow.AddSeconds(2.5);
+                EnsureLoop();
+            }
+            _shareTimer?.Stop();
+            _shareTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2.6) };
+            _shareTimer.Tick += (s, e) =>
+            {
+                _shareTimer.Stop();
+                ShareIcon.Data = Geometry.Parse("M6,0 L10.5,4.5 H7.2 V9 H4.8 V4.5 H1.5 Z M0,7.5 H2 V10 H10 V7.5 H12 V12 H0 Z");
+                ToastLabel.Text = ToastVLabel.Text = L.T("TERAZ GRA", "NOW PLAYING");
+            };
+            _shareTimer.Start();
+        }
+
         private void PillDown(object sender, MouseButtonEventArgs e)
         {
             _mouseDown = true;
             _downPx = CursorPx();
+            _downAt = DateTime.UtcNow;
+            _swiping = false;
         }
 
         private void PillMove(object sender, MouseEventArgs e)
@@ -1154,9 +1251,29 @@ namespace IslandPlayer
             if (!_mouseDown) return;
             if (e.LeftButton != MouseButtonState.Pressed) { _mouseDown = false; return; }
             Point p = CursorPx();
+            double dx = p.X - _downPx.X, dy = p.Y - _downPx.Y;
+            if (_swiping)
+            {
+                // trzymane dłużej albo pociągnięte w pionie = jednak przesuwanie wyspy
+                if ((DateTime.UtcNow - _downAt).TotalMilliseconds < 450 && Math.Abs(dy) < 30 * Dpi)
+                {
+                    _swipeShift.BeginAnimation(TranslateTransform.XProperty, null);
+                    _swipeShift.X = Math.Sign(dx) * Math.Min(18, Math.Abs(dx) / Dpi * 0.35);
+                    return;
+                }
+                _swiping = false;
+                _swipeShift.X = 0;
+            }
             if (!_moving)
             {
-                if (Math.Abs(p.X - _downPx.X) < 6 && Math.Abs(p.Y - _downPx.Y) < 6) return;
+                if (Math.Abs(dx) < 6 && Math.Abs(dy) < 6) return;
+                if (App.Config.Gestures && Math.Abs(dx) > Math.Abs(dy) * 1.5 && (DateTime.UtcNow - _downAt).TotalMilliseconds < 250)
+                {
+                    // szybki ruch w bok - może to gest zmiany utworu
+                    _swiping = true;
+                    Pill.CaptureMouse();
+                    return;
+                }
                 _moving = true;
                 _expandTimer.Stop();
                 _expanded = false;
@@ -1179,6 +1296,16 @@ namespace IslandPlayer
         {
             bool wasDown = _mouseDown;
             _mouseDown = false;
+            if (_swiping)
+            {
+                _swiping = false;
+                Pill.ReleaseMouseCapture();
+                e.Handled = true;
+                double dx = CursorPx().X - _downPx.X;
+                if (Math.Abs(dx) >= 40 * Dpi) SwipeTrack(dx < 0 ? 1 : -1);
+                else SpringBack(0);
+                return;
+            }
             if (_moving)
             {
                 _moving = false;

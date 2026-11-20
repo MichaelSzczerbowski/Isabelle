@@ -302,6 +302,10 @@ namespace IslandPlayer
             Toggle(g, L.T("Otwieraj kliknięciem na stałe", "Click to keep open"),
                 L.T("po kliknięciu odtwarzacz zostaje otwarty, aż klikniesz gdzie indziej", "after a click the player stays open until you click elsewhere"),
                 c.ClickToPin, v => c.ClickToPin = v);
+            Toggle(g, L.T("Gesty", "Gestures"),
+                L.T("szybko przesuń wyspę w lewo lub w prawo (albo dwoma palcami na touchpadzie), żeby zmienić utwór",
+                    "flick the island left or right (or swipe with two fingers on a touchpad) to change the track"),
+                c.Gestures, v => c.Gestures = v);
             Toggle(g, L.T("Tryb kropki", "Dot mode"), L.T("zawsze mała kropka – odtwarzacz otwiera się po kliknięciu", "always a tiny dot – the player opens on click"),
                 c.DotMode, v => c.DotMode = v);
 

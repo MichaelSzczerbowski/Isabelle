@@ -296,6 +296,10 @@
                         <StackPanel x:Name="SidePanel" Grid.Column="2" VerticalAlignment="Center">
                             <local:BarsControl x:Name="ExpBars" Width="20" Height="16" HorizontalAlignment="Right" />
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,9,0,0">
+                                <Button x:Name="ShareBtn" Style="{StaticResource ChipButton}" Margin="0,0,5,0" ToolTip="Udostępnij">
+                                    <Path x:Name="ShareIcon" Width="11" Height="11" Stretch="Uniform" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                          Data="M6,0 L10.5,4.5 H7.2 V9 H4.8 V4.5 H1.5 Z M0,7.5 H2 V10 H10 V7.5 H12 V12 H0 Z" />
+                                </Button>
                                 <Button x:Name="LyricsBtn" Style="{StaticResource ChipButton}" ToolTip="Tekst piosenki">
                                     <Path Width="11" Height="10" Stretch="Uniform" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                                           Data="M0,0 H12 V2 H0 Z M0,4 H12 V6 H0 Z M0,8 H8 V10 H0 Z" />

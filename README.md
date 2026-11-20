@@ -19,6 +19,8 @@ A tiny black pill at the top of your screen that shows what's playing and grows 
 | 🎤 | **Synced lyrics** with smooth scrolling (LRCLIB, free) | **Tekst piosenki** zsynchronizowany z muzyką |
 | 📊 | Animated bars and cover that react to the music | Słupki i okładka reagujące na muzykę |
 | ⏩ | Instant seeking — drag the progress bar | Natychmiastowe przewijanie |
+| 👆 | **Gestures** — flick the island sideways or swipe with two fingers on a touchpad to change tracks | **Gesty** — szybkie przesunięcie wyspy w bok (lub dwa palce na touchpadzie) zmienia utwór |
+| 📤 | **Share card** — one click copies a pretty "now playing" image for Instagram or Discord | **Karta do udostępnienia** — jednym kliknięciem obrazek „teraz słucham” do schowka |
 | 🔊 | Mouse-wheel volume + volume indicator in the island (replaces the Windows OSD) | Głośność kółkiem myszy i wskaźnik w wyspie |
 | 🌙 | Smooth fade on pause / resume | Płynne ściszanie przy pauzie |
 | ⌨️ | Global hotkeys: `Ctrl+Alt+P`, `Ctrl+Alt+→`, `Ctrl+Alt+←` | Skróty klawiszowe |
