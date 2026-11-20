@@ -15,7 +15,7 @@ namespace IslandPlayer
         [DllImport("user32.dll")]
         private static extern bool DestroyIcon(IntPtr handle);
 
-        private readonly WinForms.ToolStripMenuItem _settingsItem, _autoItem, _updateItem, _quitItem;
+        private readonly WinForms.ToolStripMenuItem _settingsItem, _autoItem, _updateItem, _quitItem, _libraryItem, _bugItem;
 
         public TrayIcon()
         {
@@ -23,12 +23,16 @@ namespace IslandPlayer
             var menu = new WinForms.ContextMenuStrip { ShowImageMargin = false };
             _updateItem = new WinForms.ToolStripMenuItem("", null, async (s, e) => await UpdateService.InstallAsync(UpdateService.Available)) { Visible = false };
             _settingsItem = new WinForms.ToolStripMenuItem("", null, (s, e) => App.ShowSettings());
+            _libraryItem = new WinForms.ToolStripMenuItem("", null, (s, e) => LibraryWindow.ShowWindow());
+            _bugItem = new WinForms.ToolStripMenuItem("", null, (s, e) => BugReportWindow.ShowWindow());
             _autoItem = new WinForms.ToolStripMenuItem("") { CheckOnClick = true };
             _autoItem.Click += (s, e) => Autostart.Set(_autoItem.Checked);
             _quitItem = new WinForms.ToolStripMenuItem("", null, (s, e) => App.Quit());
             menu.Items.Add(_updateItem);
+            menu.Items.Add(_libraryItem);
             menu.Items.Add(_settingsItem);
             menu.Items.Add(_autoItem);
+            menu.Items.Add(_bugItem);
             menu.Items.Add(new WinForms.ToolStripSeparator());
             menu.Items.Add(_quitItem);
             menu.Opening += (s, e) => RefreshMenu();
@@ -54,6 +58,8 @@ namespace IslandPlayer
             _updateItem.Visible = up != null;
             if (up != null) _updateItem.Text = L.T("Zainstaluj aktualizację ", "Install update ") + up.Version.ToString(3);
             _settingsItem.Text = L.T("Ustawienia", "Settings");
+            _libraryItem.Text = L.T("Moja muzyka i radio", "My music and radio");
+            _bugItem.Text = L.T("Zgłoś błąd…", "Report a bug…");
             _autoItem.Text = L.T("Uruchamiaj z Windows", "Start with Windows");
             _autoItem.Checked = Autostart.IsEnabled;
             _quitItem.Text = L.T("Zamknij", "Quit");

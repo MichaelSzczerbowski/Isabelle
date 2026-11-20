@@ -57,6 +57,13 @@ namespace IslandPlayer
         public bool ClickToOpen { get; set; }
         /// <summary>Przycisk „Dołącz do Discorda” w ustawieniach.</summary>
         public bool ShowDiscordInvite { get; set; } = true;
+        // ---- własny odtwarzacz (biblioteka i radio) ----
+        public string LibraryFolder { get; set; } = "";
+        public int LibraryTab { get; set; }
+        public List<RadioStation> RadioFavorites { get; set; } = new List<RadioStation>();
+        public List<RadioStation> RadioRecent { get; set; } = new List<RadioStation>();
+        public string RadioCategory { get; set; } = "pl-top";
+        public Dictionary<string, double> RadioGains { get; set; } = new Dictionary<string, double>();
         /// <summary>Wyrównywanie głośności między utworami (tylko głośność odtwarzacza).</summary>
         public bool NormalizeVolume { get; set; }
         /// <summary>Wyciszenie końca utworu i rozjaśnienie początku następnego.</summary>
@@ -110,6 +117,8 @@ namespace IslandPlayer
 
         /// <summary>auto / pl / en</summary>
         public string Language { get; set; } = "auto";
+        /// <summary>Wersja, której „Co nowego” użytkownik już widział.</summary>
+        public string LastSeenVersion { get; set; } = "";
         public bool AutoUpdate { get; set; } = true;
 
         public static string Folder

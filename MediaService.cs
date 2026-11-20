@@ -215,7 +215,7 @@ namespace IslandPlayer
                     _tlPlaying = playing;
                 }
                 double pos = _anchorPos + (playing ? (now - _anchorT).TotalSeconds : 0);
-                snap.Duration = dur > 1 ? dur : 0;
+                snap.Duration = dur > 1 && dur < 86400 ? dur : 0;   // radio podaje „nieskończony” czas
                 snap.Position = snap.Duration > 0 ? Math.Clamp(pos, 0, snap.Duration) : Math.Max(0, pos);
                 snap.At = now;
             }
@@ -257,6 +257,8 @@ namespace IslandPlayer
 
             ulong crc = ImageUtil.Hash(data);
             bool stale = _prevCrc.HasValue && crc == _prevCrc.Value && _prevCrcKey != key;
+            // nasze radio: logo stacji jest takie samo przy każdej piosence - to nie jest „stara okładka”
+            if ((appId ?? "").IndexOf("Isabelle", StringComparison.OrdinalIgnoreCase) >= 0) stale = false;
             if (stale && st.Tries >= 4) stale = false; // ta sama płyta = ta sama okładka
             if (stale) return;
             if (st.Crc.HasValue && st.Crc.Value == crc) st.Same++;
@@ -285,9 +287,36 @@ namespace IslandPlayer
             });
         }
 
-        public void PlayPause() => Run(async s => await s.TryTogglePlayPauseAsync());
-        public void Next() => Run(async s => await s.TrySkipNextAsync());
-        public void Previous() => Run(async s => await s.TrySkipPreviousAsync());
+        /// <summary>
+        /// Gra nasz własny odtwarzacz - sterujemy nim bezpośrednio (natychmiast), zamiast okrężną drogą
+        /// przez Windows (tam każde polecenie idzie przez inny proces i dochodzi z opóźnieniem).
+        /// </summary>
+        private bool OwnPlayer
+        {
+            get
+            {
+                try { return LocalPlayer.Active && (_current?.SourceAppUserModelId ?? "").IndexOf("Isabelle", StringComparison.OrdinalIgnoreCase) >= 0; }
+                catch { return false; }
+            }
+        }
+
+        public void PlayPause()
+        {
+            if (OwnPlayer) { LocalPlayer.TogglePause(); Poke(); return; }
+            Run(async s => await s.TryTogglePlayPauseAsync());
+        }
+
+        public void Next()
+        {
+            if (OwnPlayer && LocalPlayer.SkipNext()) { Poke(); return; }
+            Run(async s => await s.TrySkipNextAsync());
+        }
+
+        public void Previous()
+        {
+            if (OwnPlayer && LocalPlayer.SkipPrevious()) { Poke(); return; }
+            Run(async s => await s.TrySkipPreviousAsync());
+        }
 
         public void SetRepeat(int mode) =>
             Run(async s => await s.TryChangeAutoRepeatModeAsync((MediaPlaybackAutoRepeatMode)mode));
@@ -299,6 +328,7 @@ namespace IslandPlayer
                 _anchorPos = seconds;     // od razu przestaw "kotwicę" - stara pozycja jej nie cofnie
                 _anchorT = DateTime.UtcNow;
             }
+            if (OwnPlayer && LocalPlayer.SeekTo(seconds)) { Poke(); return; }
             Run(async s => await s.TryChangePlaybackPositionAsync((long)(seconds * 10_000_000)));
         }
 

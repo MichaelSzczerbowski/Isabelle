@@ -668,6 +668,24 @@ namespace IslandPlayer
             grid.Children.Add(btn);
             p.Children.Add(card);
 
+            // pomoc: zgłoszenie błędu i lista zmian
+            var help = Group(p, L.T("POMOC", "HELP"));
+            var helpRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(18, 12, 16, 14) };
+            var bug = PillButton("🐞  " + L.T("Zgłoś błąd", "Report a bug"), true);
+            bug.Padding = new Thickness(16, 6, 16, 7);
+            bug.MouseLeftButtonUp += (s, e) => BugReportWindow.ShowWindow();
+            helpRow.Children.Add(bug);
+            var notes = PillButton(L.T("Co nowego w tej wersji", "What's new in this version"), false);
+            notes.Padding = new Thickness(16, 6, 16, 7);
+            notes.Margin = new Thickness(8, 0, 0, 0);
+            notes.MouseLeftButtonUp += (s, e) =>
+            {
+                try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://github.com/MichaelSzczerbowski/Isabelle/releases/tag/v" + UpdateService.Current.ToString(3)) { UseShellExecute = true }); }
+                catch { }
+            };
+            helpRow.Children.Add(notes);
+            help.Children.Add(helpRow);
+
             void UpdateUi()
             {
                 var up = UpdateService.Available;

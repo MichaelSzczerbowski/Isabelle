@@ -42,6 +42,39 @@ namespace IslandPlayer
             var result = new List<LyricLine>();
             try
             {
+                var (synced, plain) = await FetchRawAsync(title, artist, duration);
+                if (!string.IsNullOrEmpty(synced)) result = Parse(synced);
+                else if (!string.IsNullOrEmpty(plain)) result = Estimate(plain, duration); // awaryjnie: tekst bez synchronizacji
+            }
+            catch (Exception ex)
+            {
+                Log.Info("tekst piosenki: " + ex.Message);
+            }
+
+            lock (Cache)
+            {
+                if (Cache.Count > 200) Cache.Clear();
+                Cache[key] = result;
+            }
+            return result;
+        }
+
+        /// <summary>Tekst z pliku zapisanego w bibliotece (.lrc z czasami albo zwykły tekst).</summary>
+        public static List<LyricLine> FromFile(string path, double duration)
+        {
+            try
+            {
+                string text = System.IO.File.ReadAllText(path);
+                var lines = Parse(text);
+                return lines.Count > 1 ? lines : Estimate(text, duration);
+            }
+            catch { return new List<LyricLine>(); }
+        }
+
+        /// <summary>Surowy tekst z LRCLIB: (z czasami, zwykły). Oba null = nie ma.</summary>
+        public static async Task<(string synced, string plain)> FetchRawAsync(string title, string artist, double duration)
+        {
+            {
                 string artist1 = CleanArtist(artist);
                 string title1 = CleanTitle(title);
                 string synced = null, plain = null;
@@ -67,20 +100,8 @@ namespace IslandPlayer
                     plain ??= r.plain;
                 }
 
-                if (!string.IsNullOrEmpty(synced)) result = Parse(synced);
-                else if (!string.IsNullOrEmpty(plain)) result = Estimate(plain, duration); // awaryjnie: tekst bez synchronizacji
+                return (synced, plain);
             }
-            catch (Exception ex)
-            {
-                Log.Info("tekst piosenki: " + ex.Message);
-            }
-
-            lock (Cache)
-            {
-                if (Cache.Count > 200) Cache.Clear();
-                Cache[key] = result;
-            }
-            return result;
         }
 
         private static async Task<JsonElement?> TryGet(string url)

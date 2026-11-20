@@ -84,6 +84,7 @@ namespace IslandPlayer
             Island = new IslandWindow();
             Island.Show();
             _tray = new TrayIcon();
+            WhatsNewWindow.ShowIfUpdated();
 
             UpdateService.Found += info => Current.Dispatcher.BeginInvoke(new Action(() => _tray?.ShowUpdate(info)));
             _ = UpdateLoopAsync();
@@ -184,6 +185,7 @@ namespace IslandPlayer
         {
             try { _tray?.Dispose(); } catch { }
             try { Island?.Cleanup(); } catch { }
+            try { LocalPlayer.Dispose(); } catch { }
             base.OnExit(e);
         }
     }

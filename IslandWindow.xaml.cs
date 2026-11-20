@@ -123,6 +123,7 @@ namespace IslandPlayer
             PrevBtn.Click += (s, e) => _media.Previous();
             AppBtn.Click += (s, e) => _media.CycleApp();
             LyricsBtn.Click += (s, e) => ToggleLyrics();
+            BuildLibraryHandle();
             FullBtn.Click += (s, e) => FullscreenPlayer.Toggle();
             ArtHost.Cursor = Cursors.Hand;
             ArtHost.MouseLeftButtonDown += (s, e) => { if (_expanded && _snap != null) e.Handled = true; };
@@ -361,6 +362,7 @@ namespace IslandPlayer
                         EnsureLoop();
                         break;
                     case 7: FullscreenPlayer.Toggle(); break;
+                    case 8: LibraryWindow.ShowWindow(); break;
                     case 5:
                     case 6:
                         if (_audio != null)
@@ -607,6 +609,53 @@ namespace IslandPlayer
             EnsureLoop();
         }
 
+        // ================= pasek „Moja muzyka” =================
+        private readonly Border _libHandle = new Border();
+
+        /// <summary>
+        /// Cienki pasek na dole rozwiniętej wyspy (jak „kreska” na dole iPhone'a). Po najechaniu poszerza się
+        /// i jaśnieje, kliknięcie otwiera „Moją muzykę” tuż pod wyspą - okno „wysuwa się” z wyspy.
+        /// </summary>
+        private void BuildLibraryHandle()
+        {
+            var bar = new Border
+            {
+                Width = 38, Height = 4, CornerRadius = new CornerRadius(2), Background = new SolidColorBrush(Color.FromArgb(90, 255, 255, 255)),
+                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            };
+            _libHandle.Child = bar;
+            _libHandle.Width = 140;
+            _libHandle.Height = 16;
+            _libHandle.Background = Brushes.Transparent;     // większe pole do kliknięcia niż sam pasek
+            _libHandle.HorizontalAlignment = HorizontalAlignment.Center;
+            _libHandle.VerticalAlignment = VerticalAlignment.Bottom;
+            _libHandle.Margin = new Thickness(0, 0, 0, 3);
+            _libHandle.Cursor = Cursors.Hand;
+            _libHandle.Opacity = 0;
+            _libHandle.IsHitTestVisible = false;
+            _libHandle.ToolTip = L.T("Moja muzyka i radio", "My music and radio");
+            var dur = TimeSpan.FromMilliseconds(160);
+            _libHandle.MouseEnter += (s, e) =>
+            {
+                bar.BeginAnimation(WidthProperty, new DoubleAnimation(64, dur) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+                bar.Background = new SolidColorBrush(Color.FromArgb(220, 255, 255, 255));
+            };
+            _libHandle.MouseLeave += (s, e) =>
+            {
+                bar.BeginAnimation(WidthProperty, new DoubleAnimation(38, dur) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+                bar.Background = new SolidColorBrush(Color.FromArgb(90, 255, 255, 255));
+            };
+            _libHandle.MouseLeftButtonDown += (s, e) => e.Handled = true;
+            _libHandle.MouseLeftButtonUp += (s, e) =>
+            {
+                e.Handled = true;
+                // punkt pod środkiem wyspy (w pikselach ekranu) - tam „wysunie się” okno
+                var p = Pill.PointToScreen(new Point(Pill.ActualWidth / 2, Pill.ActualHeight));
+                LibraryWindow.OpenFromIsland(p);
+            };
+            PillInner.Children.Add(_libHandle);
+        }
+
         // ================= dla trybu pełnoekranowego =================
         public MediaSnapshot Snapshot => _snap;
         public BitmapSource Cover => _cover;
@@ -616,6 +665,7 @@ namespace IslandPlayer
         public bool Playing => IsPlaying;
         public (double level, double max) AudioLevel => (_peakS, _peakMax);
         public bool MicBusy => _micActive;
+        public float ReadPeak() => _audio?.ReadPeak() ?? 0;
         public bool ForegroundFullscreen => _fgFullscreen && !FullscreenPlayer.IsOpen;
         public void TogglePlay() => PlayPause();
         public void Next() => _media.Next();
@@ -848,12 +898,19 @@ namespace IslandPlayer
         {
             var snap = _snap;
             if (snap == null) return;
+            if (IsOwnRadio) { _lyrics = null; _lyricsKey = snap.Key; return; }
             string key = snap.Key;
             _lyricsKey = key;
             List<LyricLine> lines;
             try
             {
-                lines = await LyricsService.GetAsync(key, snap.Title, snap.Artist, snap.Duration);
+                // nasz plik z biblioteki: tekst zapisany przy utworze (od razu, także offline)
+                var track = (snap.AppId ?? "").IndexOf("Isabelle", StringComparison.OrdinalIgnoreCase) >= 0 ? LocalPlayer.CurrentTrack : null;
+                if (track != null && track.LyricsPath == null) await LyricsFinder.Find(track);
+                if (track != null && !string.IsNullOrEmpty(track.LyricsPath) && System.IO.File.Exists(track.LyricsPath))
+                    lines = LyricsService.FromFile(track.LyricsPath, snap.Duration > 0 ? snap.Duration : track.Duration);
+                else
+                    lines = await LyricsService.GetAsync(key, snap.Title, snap.Artist, snap.Duration);
             }
             catch (Exception ex)
             {
@@ -920,7 +977,9 @@ namespace IslandPlayer
             }
         }
 
-        private bool LyricsVisible => App.Config.Lyrics && _lyrics != null && _lyrics.Count > 0;
+        private bool LyricsVisible => App.Config.Lyrics && _lyrics != null && _lyrics.Count > 0 && !IsOwnRadio;
+        /// <summary>Gra nasze radio - tekst piosenki nie ma sensu (wyłączony, przycisk schowany).</summary>
+        private bool IsOwnRadio => LocalPlayer.CurrentStation != null && (_snap?.AppId ?? "").IndexOf("Isabelle", StringComparison.OrdinalIgnoreCase) >= 0;
 
         // ---- ręczne przewijanie tekstu kółkiem ----
         private DateTime _lyricsManualUntil = DateTime.MinValue;
@@ -1037,7 +1096,8 @@ namespace IslandPlayer
                 }
             }
             if (ToastActive("vol")) return (240, 36);
-            if (_expanded) return has ? (370, LyricsVisible || InfoVisible ? 272 : 176) : (300, 96);
+            // +12 px na dole: cienki pasek otwierający „Moją muzykę”
+            if (_expanded) return has ? (370, (LyricsVisible || InfoVisible ? 272 : 176) + 12) : (300, 96 + 12);
             if (has && ToastActive("track")) return (330, 76);
             if (has) return (App.Config.CompactTitle ? 280 : 180, 32);
             switch (App.Config.IdleMode)
@@ -1114,6 +1174,10 @@ namespace IslandPlayer
             bool near = Math.Abs(tw - w) < 40 && Math.Abs(th - h) < 30;
             double expOp = Fade(ExpandedView, !st && !vol && _expanded && has ? 1 : 0, near, steps);
             Fade(IdleExpandedView, !st && !vol && _expanded && !has ? 1 : 0, near, steps);
+            // pasek „Moja muzyka” na dole rozwiniętej wyspy (tylko w poziomie)
+            double handleOp = _vertical ? 0 : Math.Max(ExpandedView.Opacity, IdleExpandedView.Opacity);
+            if (Math.Abs(_libHandle.Opacity - handleOp) > 0.01) _libHandle.Opacity = handleOp;
+            _libHandle.IsHitTestVisible = handleOp > 0.6;
             bool hz = !_vertical;
             bool compact = !st && !vol && !_expanded && !track && has && !dot;
             bool idle = !st && !vol && !_expanded && !has && !dot;
@@ -1149,6 +1213,8 @@ namespace IslandPlayer
 
             if (!_expanded && _infoOn) _infoOn = false;     // po zwinięciu wyspy wraca zwykły widok
             LyricsPanel.Visibility = LyricsVisible && !_infoOn ? Visibility.Visible : Visibility.Collapsed;
+            var lyricsBtnVis = IsOwnRadio ? Visibility.Collapsed : Visibility.Visible;
+            if (LyricsBtn.Visibility != lyricsBtnVis) LyricsBtn.Visibility = lyricsBtnVis;
             TrackInfoPanel.Visibility = InfoVisible ? Visibility.Visible : Visibility.Collapsed;
 
             // ---- poziom dźwięku ----
@@ -1211,7 +1277,7 @@ namespace IslandPlayer
                 double tw2 = SeekArea.ActualWidth;
                 TrackFill.Width = tw2 * frac;
                 Thumb.Margin = new Thickness(Math.Max(0, tw2 * frac - 5.5), 0, 0, 0);
-                string ps = Fmt(pos), ds = dur > 0 ? Fmt(dur) : "--:--";
+                string ps = Fmt(pos), ds = dur > 0 ? Fmt(dur) : L.T("na żywo", "live");
                 if (ps != _posTextCache) { PosText.Text = ps; _posTextCache = ps; }
                 if (ds != _durTextCache) { DurText.Text = ds; _durTextCache = ds; }
 

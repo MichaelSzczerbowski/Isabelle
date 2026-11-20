@@ -14,6 +14,10 @@ A tiny black pill at the top of your screen that shows what's playing and grows 
 | | English | Polski |
 |---|---|---|
 | 🎵 | Works with **any app** that shows up in the Windows media flyout — Spotify, YouTube (Chrome/Edge/Firefox), Apple Music, VLC… | Działa z **każdą aplikacją** widoczną w systemowym okienku multimediów |
+| 💿 | **My music** — built-in player for your own MP3/FLAC files, with covers and lyrics found automatically (`Ctrl+Alt+L`) | **Moja muzyka** — wbudowany odtwarzacz własnych plików MP3/FLAC, okładki i teksty pobierane automatycznie |
+| ❤️ | Liked songs and your own playlists | Polubione utwory i własne playlisty |
+| 📻 | **Internet radio** — thousands of stations, top/most-listened tabs, signal & quality estimate, station logos in the island | **Radio internetowe** — tysiące stacji, zakładki z najlepszymi, szacowana jakość sygnału, logo stacji w wyspie |
+| 🐞 | Report a bug straight from the app, "What's new" screen after each update | Zgłaszanie błędów z aplikacji, ekran „Co nowego” po aktualizacji |
 | 🖼️ | Real album art (Spotify logo bar removed automatically) | Prawdziwe okładki (pasek z logo Spotify wycinany automatycznie) |
 | 🌈 | Animated blurred album background and glow in the cover's color, like Apple Music | Ruchome, rozmyte tło z okładki i poświata w jej kolorze |
 | 🎤 | **Synced lyrics** with smooth scrolling (LRCLIB, free) | **Tekst piosenki** zsynchronizowany z muzyką |
