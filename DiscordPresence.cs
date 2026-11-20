@@ -35,7 +35,7 @@ namespace IslandPlayer
             if (!Configured) return;
             bool show = s != null && s.HasMedia && s.Playing;
             string line = lyrics && show ? (s.Lyric ?? "") : "";
-            string key = show ? s.Title + "|" + s.Artist + "|" + line : "";
+            string key = show ? s.Title + "|" + s.Artist + "|" + line + "|" + s.CoverUrl : "";
             if (key == _lastKey) return;
             if ((DateTime.UtcNow - _lastSend).TotalSeconds < 4) return;
             if (!show && _cleared) { _lastKey = key; return; }
@@ -79,7 +79,14 @@ namespace IslandPlayer
                 state = Fit(string.IsNullOrWhiteSpace(line) ? s.Artist : "🎤 " + line, 128),
                 timestamps,
                 // trzecia linijka: wykonawca, gdy w statusie jest tekst piosenki - inaczej link do naszego serwera
-                assets = new { large_image = "logo", large_text = Fit(string.IsNullOrWhiteSpace(line) ? ServerText : s.Artist, 128) },
+                // duża grafika: okładka piosenki, mała w rogu: nasze logo (bez okładki - samo logo)
+                assets = string.IsNullOrEmpty(s.CoverUrl)
+                    ? (object)new { large_image = "logo", large_text = Fit(string.IsNullOrWhiteSpace(line) ? ServerText : s.Artist, 128) }
+                    : new
+                    {
+                        large_image = s.CoverUrl, large_text = Fit(string.IsNullOrWhiteSpace(line) ? ServerText : s.Artist, 128),
+                        small_image = "logo", small_text = "Isabelle",
+                    },
                 // klikalny przycisk (widzą go inni - na własnym profilu Discord go ukrywa)
                 buttons = new[] { new { label = "Serwer Isabelle", url = ServerUrl } },
             };

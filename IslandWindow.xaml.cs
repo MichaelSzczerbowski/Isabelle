@@ -429,6 +429,7 @@ namespace IslandPlayer
                 LyricsStack.Children.Clear();
                 if (App.Config.Lyrics) LoadLyrics();
                 if (_infoOn) LoadTrackInfo(snap);
+                if (App.Config.DiscordEnabled) LoadCoverUrl(snap);
                 if (oldKey != null && oldApp == snap.AppId && App.Config.TrackToast && !_expanded)
                 {
                     _toastKind = "track";
@@ -1750,6 +1751,7 @@ namespace IslandPlayer
             if (c.OverlayEnabled) _overlay.Start(c.OverlayPort);
             else _overlay.Stop();
             if (!c.DiscordEnabled) _discord.Clear();
+            else if (_snap != null && _coverUrlKey != _snap.Key) LoadCoverUrl(_snap);
 
             if (!c.AlbumWallpaper && c.WallpaperActive) WallpaperService.Restore();
             else if (c.AlbumWallpaper && !_wallpaperWasOn && _cover != null && IsPlaying) { _wallTimer.Stop(); _wallTimer.Start(); }
@@ -1763,6 +1765,18 @@ namespace IslandPlayer
         }
 
         public string OverlayStatus => _overlay.Running ? "http://localhost:" + _overlay.Port + "/" : _overlay.Error;
+
+        // adres okładki do statusu na Discordzie (Discord nie przyjmie obrazka z pamięci, tylko link)
+        private string _coverUrl = "", _coverUrlKey;
+
+        private async void LoadCoverUrl(MediaSnapshot snap)
+        {
+            string key = snap.Key;
+            var info = await TrackInfoService.Get(snap.Title, snap.Artist);
+            if (_snap == null || _snap.Key != key) return;
+            _coverUrl = info?.ArtworkUrl ?? "";
+            _coverUrlKey = key;
+        }
 
         /// <summary>Publikuje stan dla nakładki OBS i Discorda.</summary>
         private void PublishState()
@@ -1787,6 +1801,7 @@ namespace IslandPlayer
                 NextLyric = next,
                 Accent = Hex(_accent),
                 CoverKey = _cover != null ? (_coverKey ?? "") : "",
+                CoverUrl = _coverUrlKey == s.Key ? _coverUrl : "",
                 Cover = _cover,
             };
         }

@@ -16,6 +16,7 @@ namespace IslandPlayer
         public int TrackNumber, TrackCount;
         public double Length;          // sekundy
         public bool Single;
+        public string ArtworkUrl = "";  // okładka 600×600 (do statusu na Discordzie)
     }
 
     /// <summary>
@@ -94,6 +95,7 @@ namespace IslandPlayer
                     TrackNumber = Int(r, "trackNumber"),
                     TrackCount = Int(r, "trackCount"),
                     Length = Int(r, "trackTimeMillis") / 1000.0,
+                    ArtworkUrl = Str(r, "artworkUrl100").Replace("100x100bb", "600x600bb"),
                 };
                 bestDate = date;
             }

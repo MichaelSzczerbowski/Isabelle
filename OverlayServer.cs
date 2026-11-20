@@ -23,6 +23,7 @@ namespace IslandPlayer
         public string NextLyric = "";
         public string Accent = "#FF5CA0";
         public string CoverKey = "";
+        public string CoverUrl = "";   // publiczny adres okładki (dla Discorda), pusty = brak
         public BitmapSource Cover;   // zamrożona (Freeze) - można czytać z innych wątków
         public bool HasMedia => Title.Length > 0;
     }
