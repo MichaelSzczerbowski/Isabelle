@@ -144,7 +144,12 @@ namespace IslandPlayer
                 if (File.Exists(FilePath))
                 {
                     var s = JsonSerializer.Deserialize<Settings>(File.ReadAllText(FilePath));
-                    if (s != null) return s;
+                    if (s != null)
+                    {
+                        // ustawienia z wersji sprzed 1.5 (bez tego pola) = aktualizacja, nie świeża instalacja
+                        if (string.IsNullOrEmpty(s.LastSeenVersion)) s.LastSeenVersion = "1.4.0";
+                        return s;
+                    }
                 }
             }
             catch (Exception ex)
