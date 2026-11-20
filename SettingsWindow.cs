@@ -180,18 +180,28 @@ namespace IslandPlayer
                 _navItems.Add(item);
             }
 
-            var footer = new StackPanel { Margin = new Thickness(8, 0, 0, 0) };
+            // bez marginesu (wcześniej ujemny margines przycisku ucinał mu prawy brzeg)
+            var footer = new StackPanel();
             // zaproszenie na nasz serwer Discord
             var invite = new Border
             {
                 CornerRadius = new CornerRadius(12), Background = Hex("#5865F2"), Padding = new Thickness(12, 9, 12, 10),
-                Margin = new Thickness(-8, 0, 12, 14), Cursor = Cursors.Hand, ToolTip = "discord.gg/ueUYTw8ry6",
+                Margin = new Thickness(0, 0, 0, 14), Cursor = Cursors.Hand, ToolTip = "discord.gg/ueUYTw8ry6",
                 RenderTransformOrigin = new Point(0.5, 0.5), RenderTransform = new ScaleTransform(1, 1),
             };
             var inviteText = new StackPanel();
             inviteText.Children.Add(new TextBlock { Text = L.T("Dołącz do Discorda", "Join our Discord"), FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White });
             inviteText.Children.Add(new TextBlock { Text = L.T("pomoc, pomysły i nowości", "help, ideas and news"), FontSize = 11, Foreground = Hex("#D9FFFFFF"), Margin = new Thickness(0, 1, 0, 0) });
-            invite.Child = inviteText;
+            var inviteRow = new StackPanel { Orientation = Orientation.Horizontal };
+            inviteRow.Children.Add(new Path
+            {
+                // logo Discorda
+                Data = Geometry.Parse("M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,46,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,46,96.12,53,91.08,65.69,84.69,65.69Z"),
+                Width = 24, Height = 19, Stretch = Stretch.Uniform, Fill = Brushes.White,
+                VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 11, 0),
+            });
+            inviteRow.Children.Add(inviteText);
+            invite.Child = inviteRow;
             invite.MouseEnter += (s, e) => invite.Background = Hex("#4752C4");
             invite.MouseLeave += (s, e) => { invite.Background = Hex("#5865F2"); ((ScaleTransform)invite.RenderTransform).ScaleX = ((ScaleTransform)invite.RenderTransform).ScaleY = 1; };
             invite.MouseLeftButtonDown += (s, e) => { ((ScaleTransform)invite.RenderTransform).ScaleX = ((ScaleTransform)invite.RenderTransform).ScaleY = 0.97; e.Handled = true; };
@@ -208,11 +218,12 @@ namespace IslandPlayer
                 Text = L.T("Zamknij program", "Quit Isabelle"), FontSize = 12.5, FontWeight = FontWeights.SemiBold,
                 Foreground = Hex("#FF6B61"), Cursor = Cursors.Hand,
             };
+            quit.Margin = new Thickness(8, 0, 0, 0);
             quit.MouseLeftButtonUp += (s, e) => App.Quit();
             footer.Children.Add(quit);
             footer.Children.Add(new TextBlock
             {
-                Text = L.T("Wersja ", "Version ") + UpdateService.Current.ToString(3), FontSize = 11, Foreground = TextSub, Margin = new Thickness(0, 6, 0, 0),
+                Text = L.T("Wersja ", "Version ") + UpdateService.Current.ToString(3), FontSize = 11, Foreground = TextSub, Margin = new Thickness(8, 6, 0, 0),
             });
             DockPanel.SetDock(footer, Dock.Bottom);
             side.Children.Add(footer);
