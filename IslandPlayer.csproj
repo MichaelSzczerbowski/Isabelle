@@ -14,7 +14,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>icon.ico</ApplicationIcon>
     <Product>Isabelle</Product>
-    <Version>1.4.0</Version>
+    <Version>1.4.1</Version>
     <Description>Dynamic Island music player for Windows</Description>
   </PropertyGroup>
 
