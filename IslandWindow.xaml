@@ -196,8 +196,8 @@
                 <Grid x:Name="StartupView" Opacity="0" IsHitTestVisible="False">
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
                         <local:BarsControl x:Name="StartupBars" Width="18" Height="16" Fill="#FF5CA0" />
-                        <TextBlock x:Name="StartupText" Text="Isabelle" FontSize="16" FontFamily="Segoe Script" Foreground="White"
-                                   Margin="10,0,0,1" VerticalAlignment="Center" />
+                        <!-- napis "Isabelle" rysowany kreska po kresce (jak "hello" przy pierwszym uruchomieniu iPhone'a) -->
+                        <Canvas x:Name="StartupText" Margin="12,0,0,0" VerticalAlignment="Center" Width="96" Height="32" />
                     </StackPanel>
                 </Grid>
 

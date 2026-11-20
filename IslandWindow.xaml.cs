@@ -159,26 +159,90 @@ namespace IslandPlayer
         private DateTime _startupUntil;
         private bool Startup => DateTime.UtcNow < _startupUntil;
 
-        /// <summary>Napis "Isabelle" pojawia się od lewej do prawej, jakby był pisany odręcznie, z błyskiem "pióra" na końcu.</summary>
+        /// <summary>
+        /// "Isabelle" pisane jak "hello" w iPhonie: kontur każdej litery jest rysowany po kolei, od lewej do prawej,
+        /// stałą prędkością "pióra", a na końcu napis wypełnia się bielą.
+        /// </summary>
         private void AnimateHandwriting()
         {
-            var ink = new GradientStop(Colors.Black, 0);
-            var edge = new GradientStop(Colors.Transparent, 0.06);
-            var mask = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
-            mask.GradientStops.Add(ink);
-            mask.GradientStops.Add(edge);
-            StartupText.OpacityMask = mask;
+            try
+            {
+                StartupText.Children.Clear();
+                var face = new Typeface(new FontFamily("Segoe Script"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
+                var ft = new FormattedText("Isabelle", System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                    face, 20, Brushes.White, VisualTreeHelper.GetDpi(this).PixelsPerDip);
+                Geometry text = ft.BuildGeometry(new Point(0, 0));
+                PathGeometry flat = text.GetFlattenedPathGeometry(0.15, ToleranceType.Absolute);
+                Rect bounds = flat.Bounds;
+                if (bounds.IsEmpty) return;
+                var move = new TranslateTransform(-bounds.Left + 2, -bounds.Top + 2);
+                StartupText.Width = bounds.Width + 4;
+                StartupText.Height = bounds.Height + 4;
 
-            var begin = TimeSpan.FromSeconds(0.45);      // najpierw wyspa wyskakuje, potem zaczyna się pisanie
-            var write = TimeSpan.FromSeconds(1.15);
-            var ease = new SineEase { EasingMode = EasingMode.EaseInOut };
-            ink.BeginAnimation(GradientStop.OffsetProperty, new DoubleAnimation(-0.06, 1.0, write) { BeginTime = begin, EasingFunction = ease });
-            edge.BeginAnimation(GradientStop.OffsetProperty, new DoubleAnimation(0.0, 1.06, write) { BeginTime = begin, EasingFunction = ease });
+                // kontury liter (każda figura osobno) posortowane od lewej
+                var figures = new List<(PathFigure fig, double len, double left)>();
+                foreach (var f in flat.Figures)
+                {
+                    double len = 0, left = f.StartPoint.X;
+                    Point prev = f.StartPoint;
+                    foreach (var seg in f.Segments)
+                    {
+                        IEnumerable<Point> pts = seg is PolyLineSegment pl ? pl.Points
+                                               : seg is LineSegment ls ? new[] { ls.Point }
+                                               : (IEnumerable<Point>)Array.Empty<Point>();
+                        foreach (var p in pts)
+                        {
+                            len += (p - prev).Length;
+                            left = Math.Min(left, p.X);
+                            prev = p;
+                        }
+                    }
+                    if (f.IsClosed) len += (f.StartPoint - prev).Length;
+                    if (len > 0.5) figures.Add((f, len, left));
+                }
+                figures.Sort((x, y) => x.left.CompareTo(y.left));
+                double total = 0;
+                foreach (var f in figures) total += f.len;
+                if (total <= 0) return;
 
-            // lekkie "wjechanie" tekstu podczas pisania
-            var shift = new TranslateTransform(-4, 0);
-            StartupText.RenderTransform = shift;
-            shift.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(-4, 0, write) { BeginTime = begin, EasingFunction = ease });
+                var begin = TimeSpan.FromSeconds(0.4);     // najpierw wyspa wyskakuje
+                double writeSec = 1.45;                    // czas pisania całego napisu
+                const double thick = 1.1;
+                double elapsed = 0;
+                foreach (var f in figures)
+                {
+                    var geo = new PathGeometry(new[] { f.fig.Clone() }) { Transform = move };
+                    double dashLen = f.len / thick + 2;    // długość kreski w jednostkach grubości linii
+                    var stroke = new System.Windows.Shapes.Path
+                    {
+                        Data = geo, Stroke = Brushes.White, StrokeThickness = thick,
+                        StrokeLineJoin = PenLineJoin.Round, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
+                        StrokeDashArray = new DoubleCollection { dashLen, dashLen }, StrokeDashOffset = dashLen,
+                    };
+                    double dur = writeSec * f.len / total;
+                    stroke.BeginAnimation(System.Windows.Shapes.Shape.StrokeDashOffsetProperty,
+                        new DoubleAnimation(dashLen, 0, TimeSpan.FromSeconds(dur)) { BeginTime = begin + TimeSpan.FromSeconds(elapsed) });
+                    StartupText.Children.Add(stroke);
+                    elapsed += dur;
+                }
+
+                // na koniec napis wypełnia się (z zachowaniem dziurek w literach)
+                var fill = new System.Windows.Shapes.Path
+                {
+                    Data = new GeometryGroup { Children = { text }, Transform = move, FillRule = FillRule.Nonzero },
+                    Fill = Brushes.White, Opacity = 0,
+                };
+                StartupText.Children.Add(fill);
+                fill.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromSeconds(0.35))
+                {
+                    BeginTime = begin + TimeSpan.FromSeconds(writeSec - 0.1),
+                    EasingFunction = new SineEase { EasingMode = EasingMode.EaseOut },
+                });
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex);
+            }
         }
 
         private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -186,7 +250,7 @@ namespace IslandPlayer
             if (App.Config.StartupAnimation)
             {
                 // wyspa wyrasta z niczego, pokazuje logo i chowa się do zwykłego rozmiaru
-                _startupUntil = DateTime.UtcNow.AddSeconds(2.6);
+                _startupUntil = DateTime.UtcNow.AddSeconds(2.9);
                 _w = _h = 0;
                 AnimateHandwriting();
             }
@@ -815,7 +879,7 @@ namespace IslandPlayer
         private (double w, double h) Target()
         {
             bool has = _snap != null;
-            if (Startup) return _vertical ? (40, 120) : (176, 40);
+            if (Startup) return _vertical ? (40, 120) : (190, 46);
             if (App.Config.DotMode && !_expanded && !ToastActive("vol")) return (30, 30);
             if (_vertical)
             {
