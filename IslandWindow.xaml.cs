@@ -1209,11 +1209,14 @@ namespace IslandPlayer
         private DispatcherTimer _shareTimer;
 
         /// <summary>Kopiuje klikalny link do utworu.</summary>
-        private void ShareLink()
+        private async void ShareLink()
         {
             var snap = _snap;
             if (snap == null || string.IsNullOrWhiteSpace(snap.Title)) return;
-            ShareCard.CopyText(ShareCard.Link(snap.AppId, snap.Title, snap.Artist).url);
+            // prawdziwy link do utworu (z próbką na Discordzie), a gdy się nie da - link do wyszukiwania
+            string url = await SpotifyLinks.FindTrack(snap.Title, snap.Artist)
+                         ?? ShareCard.Link(snap.AppId, snap.Title, snap.Artist).url;
+            ShareCard.CopyText(url);
             ShareConfirm(false, L.T("SKOPIOWANO LINK", "LINK COPIED"));
         }
 

@@ -20,7 +20,7 @@ A tiny black pill at the top of your screen that shows what's playing and grows 
 | 📊 | Animated bars and cover that react to the music | Słupki i okładka reagujące na muzykę |
 | ⏩ | Instant seeking — drag the progress bar | Natychmiastowe przewijanie |
 | 👆 | **Gestures** — flick the island sideways or swipe with two fingers on a touchpad to change tracks | **Gesty** — szybkie przesunięcie wyspy w bok (lub dwa palce na touchpadzie) zmienia utwór |
-| 📤 | **Share card** — one click copies a pretty "now playing" image for Instagram or Discord; right-click copies a link to the song | **Karta do udostępnienia** — obrazek „teraz słucham” do schowka; prawy przycisk kopiuje link do utworu |
+| 📤 | **Share card** — one click copies a pretty "now playing" image for Instagram or Discord; right-click copies a link to the song (a real Spotify track link with preview if you add your own free Spotify app keys in Settings → Extras) | **Karta do udostępnienia** — obrazek „teraz słucham” do schowka; prawy przycisk kopiuje link do utworu |
 | 🔊 | Mouse-wheel volume + volume indicator in the island (replaces the Windows OSD) | Głośność kółkiem myszy i wskaźnik w wyspie |
 | 🌙 | Smooth fade on pause / resume | Płynne ściszanie przy pauzie |
 | ⌨️ | Global hotkeys: `Ctrl+Alt+P`, `Ctrl+Alt+→`, `Ctrl+Alt+←` | Skróty klawiszowe |
