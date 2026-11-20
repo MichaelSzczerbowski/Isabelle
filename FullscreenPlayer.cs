@@ -46,7 +46,9 @@ namespace IslandPlayer
         private readonly TranslateTransform _lyricsShift = new TranslateTransform();
         private readonly ColumnDefinition _lyricsCol = new ColumnDefinition();
         private readonly FrameworkElement _chrome;
-        private readonly List<TextBlock> _lines = new List<TextBlock>();
+        private readonly List<FrameworkElement> _lines = new List<FrameworkElement>();
+        private readonly List<BarsControl> _bars = new List<BarsControl>();
+        private DateTime _keyAt = DateTime.MinValue;
 
         private string _key, _coverKey;
         private BitmapSource _shownCover;
@@ -262,7 +264,12 @@ namespace IslandPlayer
                 Canvas.SetLeft(img, (w - bgSize) / 2);
                 Canvas.SetTop(img, (h - bgSize) / 2);
             }
-            foreach (var l in _lines) l.FontSize = LyricSize();
+            double fs = LyricSize();
+            foreach (var l in _lines)
+            {
+                if (l is TextBlock tb) tb.FontSize = fs;
+                else if (l is Border b && b.Child is BarsControl bc) { bc.Width = fs * 1.4; bc.Height = fs * 0.8; }
+            }
         }
 
         private double LyricSize() => Math.Clamp(ActualHeight / 24, 24, 54);
@@ -278,6 +285,7 @@ namespace IslandPlayer
 
             if (snap.Key != _key)
             {
+                if (_key != null) _keyAt = now;     // tylko zmiana utworu w trakcie, nie pierwsze otwarcie
                 _key = snap.Key;
                 _title.Text = snap.Title;
                 _artist.Text = snap.Artist;
@@ -303,6 +311,9 @@ namespace IslandPlayer
 
             // postęp i przycisk
             double pos = _island.Position, dur = snap.Duration;
+            // tuż po zmianie utworu odtwarzacz potrafi chwilę podawać pozycję z poprzedniego - nie skaczemy wtedy na koniec tekstu
+            double sinceKey = (now - _keyAt).TotalSeconds;
+            if (sinceKey < 2.5) pos = Math.Min(pos, sinceKey + 1);
             _trackFill.Width = dur > 0 && _track.ActualWidth > 0 ? Math.Max(6, _track.ActualWidth * Math.Clamp(pos / dur, 0, 1)) : 0;
             _tPos.Text = Time(pos);
             _tDur.Text = dur > 0 ? "-" + Time(dur - pos) : "";
@@ -320,6 +331,12 @@ namespace IslandPlayer
             _sc2.ScaleX = _sc2.ScaleY = 1.85 + Math.Cos(_phase * 0.7) * 0.2;
 
             UpdateLyrics(pos, dt);
+            if (_bars.Count > 0)
+            {
+                var (level, max) = _island.AudioLevel;
+                double t = (now - DateTime.UnixEpoch).TotalSeconds % 10000;
+                foreach (var b in _bars) b.Update(t, playing, level, max);
+            }
 
             // przycisk zamknięcia i kursor znikają po chwili bezruchu
             bool idle = (now - _lastMouse).TotalSeconds > 3;
@@ -354,21 +371,43 @@ namespace IslandPlayer
             _lyricIdx = -2;
             _lyricsStack.Children.Clear();
             _lines.Clear();
+            _bars.Clear();
             _shift = 0;
             _lyricsShift.Y = 0;
             if (lyrics != null)
             {
+                double fs = LyricSize();
                 foreach (var l in lyrics)
                 {
-                    var tb = new TextBlock
+                    FrameworkElement el;
+                    if (l.Instrumental)
                     {
-                        Text = l.Instrumental ? "♪" : l.Text, FontSize = LyricSize(), FontWeight = FontWeights.Bold,
-                        TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 22), Opacity = 0.3,
-                        Cursor = Cursors.Hand, Tag = l.Time, Background = Brushes.Transparent,
-                    };
-                    tb.MouseLeftButtonUp += (s, e) => { _island.SeekTo((double)((TextBlock)s).Tag); _lyricIdx = -2; _manualUntil = DateTime.MinValue; };
-                    _lines.Add(tb);
-                    _lyricsStack.Children.Add(tb);
+                        // sama muzyka: nasze słupki zamiast nutki
+                        var bars = new BarsControl
+                        {
+                            Width = fs * 1.4, Height = fs * 0.8, HorizontalAlignment = HorizontalAlignment.Left,
+                            Fill = App.Config.BarsColor == "white" ? Brushes.White : new SolidColorBrush(_island.AccentColor),
+                            Mode = App.Config.BarsStyle == "dots" ? "dots" : "bars",
+                        };
+                        _bars.Add(bars);
+                        el = new Border { Child = bars, Background = Brushes.Transparent, Padding = new Thickness(0, 6, 0, 6),
+                                          HorizontalAlignment = HorizontalAlignment.Left };
+                    }
+                    else
+                    {
+                        el = new TextBlock
+                        {
+                            Text = l.Text, FontSize = fs, FontWeight = FontWeights.Bold, TextWrapping = TextWrapping.Wrap,
+                            Background = Brushes.Transparent,
+                        };
+                    }
+                    el.Margin = new Thickness(0, 0, 0, 22);
+                    el.Opacity = 0.28;
+                    el.Cursor = Cursors.Hand;
+                    el.Tag = l.Time;
+                    el.MouseLeftButtonUp += (s, e) => { _island.SeekTo((double)((FrameworkElement)s).Tag); _lyricIdx = -2; _manualUntil = DateTime.MinValue; };
+                    _lines.Add(el);
+                    _lyricsStack.Children.Add(el);
                 }
             }
             Layout();
@@ -389,10 +428,10 @@ namespace IslandPlayer
             for (int i = 0; i < _lines.Count; i++)
             {
                 double op = i == idx ? 1 : Math.Abs(i - idx) == 1 ? 0.45 : 0.28;
-                var tb = _lines[i];
-                double cur = tb.Opacity;
-                if (Math.Abs(cur - op) > 0.004) tb.Opacity = cur + (op - cur) * k;
-                else if (cur != op) tb.Opacity = op;
+                var el = _lines[i];
+                double cur = el.Opacity;
+                if (Math.Abs(cur - op) > 0.004) el.Opacity = cur + (op - cur) * k;
+                else if (cur != op) el.Opacity = op;
             }
             if (DateTime.UtcNow < _manualUntil)
             {

@@ -589,6 +589,7 @@ namespace IslandPlayer
         public string LyricsKey => _lyricsKey;
         public double Position => DisplayPosition();
         public bool Playing => IsPlaying;
+        public (double level, double max) AudioLevel => (_peakS, _peakMax);
         public void TogglePlay() => PlayPause();
         public void Next() => _media.Next();
         public void Previous() => _media.Previous();
