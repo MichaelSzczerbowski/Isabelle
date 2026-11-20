@@ -194,7 +194,7 @@
                 <Grid x:Name="StartupView" Opacity="0" IsHitTestVisible="False">
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
                         <local:BarsControl x:Name="StartupBars" Width="18" Height="16" Fill="#FF5CA0" />
-                        <TextBlock x:Name="StartupText" Text="Isabelle" FontSize="14" FontWeight="SemiBold" Foreground="White"
+                        <TextBlock x:Name="StartupText" Text="Isabelle" FontSize="16" FontFamily="Segoe Script" Foreground="White"
                                    Margin="10,0,0,1" VerticalAlignment="Center" />
                     </StackPanel>
                 </Grid>

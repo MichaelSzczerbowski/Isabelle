@@ -159,13 +159,36 @@ namespace IslandPlayer
         private DateTime _startupUntil;
         private bool Startup => DateTime.UtcNow < _startupUntil;
 
+        /// <summary>Napis "Isabelle" pojawia się od lewej do prawej, jakby był pisany odręcznie, z błyskiem "pióra" na końcu.</summary>
+        private void AnimateHandwriting()
+        {
+            var ink = new GradientStop(Colors.Black, 0);
+            var edge = new GradientStop(Colors.Transparent, 0.06);
+            var mask = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
+            mask.GradientStops.Add(ink);
+            mask.GradientStops.Add(edge);
+            StartupText.OpacityMask = mask;
+
+            var begin = TimeSpan.FromSeconds(0.45);      // najpierw wyspa wyskakuje, potem zaczyna się pisanie
+            var write = TimeSpan.FromSeconds(1.15);
+            var ease = new SineEase { EasingMode = EasingMode.EaseInOut };
+            ink.BeginAnimation(GradientStop.OffsetProperty, new DoubleAnimation(-0.06, 1.0, write) { BeginTime = begin, EasingFunction = ease });
+            edge.BeginAnimation(GradientStop.OffsetProperty, new DoubleAnimation(0.0, 1.06, write) { BeginTime = begin, EasingFunction = ease });
+
+            // lekkie "wjechanie" tekstu podczas pisania
+            var shift = new TranslateTransform(-4, 0);
+            StartupText.RenderTransform = shift;
+            shift.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(-4, 0, write) { BeginTime = begin, EasingFunction = ease });
+        }
+
         private async void OnLoaded(object sender, RoutedEventArgs e)
         {
             if (App.Config.StartupAnimation)
             {
                 // wyspa wyrasta z niczego, pokazuje logo i chowa się do zwykłego rozmiaru
-                _startupUntil = DateTime.UtcNow.AddSeconds(1.9);
+                _startupUntil = DateTime.UtcNow.AddSeconds(2.6);
                 _w = _h = 0;
+                AnimateHandwriting();
             }
             ApplySettings();
             _audio = new AudioService(Dispatcher);
