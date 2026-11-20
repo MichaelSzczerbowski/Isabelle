@@ -181,6 +181,28 @@ namespace IslandPlayer
             }
 
             var footer = new StackPanel { Margin = new Thickness(8, 0, 0, 0) };
+            // zaproszenie na nasz serwer Discord
+            var invite = new Border
+            {
+                CornerRadius = new CornerRadius(12), Background = Hex("#5865F2"), Padding = new Thickness(12, 9, 12, 10),
+                Margin = new Thickness(-8, 0, 12, 14), Cursor = Cursors.Hand, ToolTip = "discord.gg/ueUYTw8ry6",
+                RenderTransformOrigin = new Point(0.5, 0.5), RenderTransform = new ScaleTransform(1, 1),
+            };
+            var inviteText = new StackPanel();
+            inviteText.Children.Add(new TextBlock { Text = L.T("Dołącz do Discorda", "Join our Discord"), FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White });
+            inviteText.Children.Add(new TextBlock { Text = L.T("pomoc, pomysły i nowości", "help, ideas and news"), FontSize = 11, Foreground = Hex("#D9FFFFFF"), Margin = new Thickness(0, 1, 0, 0) });
+            invite.Child = inviteText;
+            invite.MouseEnter += (s, e) => invite.Background = Hex("#4752C4");
+            invite.MouseLeave += (s, e) => { invite.Background = Hex("#5865F2"); ((ScaleTransform)invite.RenderTransform).ScaleX = ((ScaleTransform)invite.RenderTransform).ScaleY = 1; };
+            invite.MouseLeftButtonDown += (s, e) => { ((ScaleTransform)invite.RenderTransform).ScaleX = ((ScaleTransform)invite.RenderTransform).ScaleY = 0.97; e.Handled = true; };
+            invite.MouseLeftButtonUp += (s, e) =>
+            {
+                ((ScaleTransform)invite.RenderTransform).ScaleX = ((ScaleTransform)invite.RenderTransform).ScaleY = 1;
+                e.Handled = true;
+                try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://discord.gg/ueUYTw8ry6") { UseShellExecute = true }); }
+                catch (Exception ex) { Log.Error(ex); }
+            };
+            footer.Children.Add(invite);
             var quit = new TextBlock
             {
                 Text = L.T("Zamknij program", "Quit Isabelle"), FontSize = 12.5, FontWeight = FontWeights.SemiBold,
