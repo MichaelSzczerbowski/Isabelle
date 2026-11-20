@@ -12,12 +12,12 @@ using System.Windows.Shapes;
 namespace IslandPlayer
 {
     /// <summary>
-    /// Karta „teraz słucham” do udostępnienia: okładka na rozmytym tle, tytuł, wykonawca, pasek postępu
-    /// i podpis isabelle. Renderowana do PNG 1080×1350 (pasuje na Instagram i Discorda).
+    /// Karta „teraz słucham” w stylu podglądu Spotify: tło w kolorze okładki, na środku karta z okładką,
+    /// tytułem, wykonawcą i podpisem isabelle. PNG 1080×1920 (format relacji na Instagramie).
     /// </summary>
     public static class ShareCard
     {
-        private const double W = 1080, H = 1350, ArtSize = 760, Left = (W - ArtSize) / 2;
+        private const double W = 1080, H = 1920, CardW = 760, Pad = 40, ArtSize = CardW - 2 * Pad;
 
         /// <summary>Link do utworu: wyszukiwanie w Spotify (albo w YouTube, gdy gra przeglądarka).</summary>
         public static (string url, string label) Link(string appId, string title, string artist)
@@ -33,110 +33,63 @@ namespace IslandPlayer
                 : ("https://www.youtube.com/results?search_query=" + q, L.T("Obejrzyj na YouTube", "Watch on YouTube"));
         }
 
-        public static BitmapSource Render(BitmapSource cover, string title, string artist,
-                                          double position, double duration, Color accent)
+        public static BitmapSource Render(BitmapSource cover, string title, string artist, Color coverColor)
         {
-            var root = new Canvas { Width = W, Height = H, Background = new SolidColorBrush(Color.FromRgb(16, 16, 20)), ClipToBounds = true };
+            // kolory jak w podglądzie Spotify: tło i karta w kolorze okładki, ani za ciemne, ani za jasne
+            Color c = coverColor;
+            double lum = 0.299 * c.R + 0.587 * c.G + 0.114 * c.B;
+            if (lum < 70) c = Mix(c, Colors.White, (70 - lum) / 255 * 1.6);
+            else if (lum > 170) c = Mix(c, Colors.Black, (lum - 170) / 255 * 1.8);
+            Color bgTop = c, bgBottom = Mix(c, Colors.Black, 0.6), cardColor = Mix(c, Colors.Black, 0.32);
 
-            // tło: powiększona, mocno rozmyta okładka + przyciemnienie
-            if (cover != null)
+            var root = new Canvas { Width = W, Height = H, ClipToBounds = true,
+                                    Background = new LinearGradientBrush(bgTop, bgBottom, 90) };
+
+            // karta na środku: okładka, tytuł, wykonawca, podpis
+            var card = new Border
             {
-                var bg = new Image { Source = cover, Stretch = Stretch.UniformToFill, Width = H * 1.25, Height = H * 1.25,
-                                     Effect = new BlurEffect { Radius = 140, RenderingBias = RenderingBias.Quality } };
-                Canvas.SetLeft(bg, (W - H * 1.25) / 2);
-                Canvas.SetTop(bg, (H - H * 1.25) / 2);
-                root.Children.Add(bg);
-            }
-            else
+                Width = CardW, CornerRadius = new CornerRadius(28), Background = new SolidColorBrush(cardColor),
+                Padding = new Thickness(Pad),
+                Effect = new DropShadowEffect { BlurRadius = 80, ShadowDepth = 24, Opacity = 0.45, Color = Colors.Black, Direction = 270 },
+            };
+            var stack = new StackPanel();
+            card.Child = stack;
+
+            stack.Children.Add(new Border
             {
-                root.Background = new LinearGradientBrush(Mix(accent, Colors.Black, 0.55), Color.FromRgb(12, 12, 16), 90);
-            }
-            root.Children.Add(new Rectangle
+                Width = ArtSize, Height = ArtSize, CornerRadius = new CornerRadius(14),
+                Background = cover != null ? new ImageBrush(cover) { Stretch = Stretch.UniformToFill }
+                                           : (Brush)new SolidColorBrush(Mix(c, Colors.Black, 0.5)),
+            });
+            stack.Children.Add(new TextBlock
             {
-                Width = W, Height = H,
-                Fill = new LinearGradientBrush(new GradientStopCollection
-                {
-                    new GradientStop(Color.FromArgb(90, 0, 0, 0), 0),
-                    new GradientStop(Color.FromArgb(150, 0, 0, 0), 0.55),
-                    new GradientStop(Color.FromArgb(215, 0, 0, 0), 1),
-                }, 90),
+                Text = title ?? "", FontSize = 50, FontWeight = FontWeights.Bold, Foreground = Brushes.White,
+                FontFamily = new FontFamily("Segoe UI"), TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 34, 0, 0),
+            });
+            stack.Children.Add(new TextBlock
+            {
+                Text = artist ?? "", FontSize = 36, Foreground = new SolidColorBrush(Color.FromArgb(190, 255, 255, 255)),
+                FontFamily = new FontFamily("Segoe UI"), TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 6, 0, 0),
             });
 
-            // okładka
-            var art = new Border
-            {
-                Width = ArtSize, Height = ArtSize, CornerRadius = new CornerRadius(36),
-                Background = cover != null ? new ImageBrush(cover) { Stretch = Stretch.UniformToFill }
-                                           : (Brush)new SolidColorBrush(Color.FromRgb(42, 42, 48)),
-                Effect = new DropShadowEffect { BlurRadius = 70, ShadowDepth = 18, Opacity = 0.55, Color = Colors.Black, Direction = 270 },
-            };
-            Canvas.SetLeft(art, Left);
-            Canvas.SetTop(art, 120);
-            root.Children.Add(art);
-
-            // tytuł i wykonawca
-            var titleText = new TextBlock
-            {
-                Text = title ?? "", Width = ArtSize, FontSize = 54, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White,
-                FontFamily = new FontFamily("Segoe UI"), TextTrimming = TextTrimming.CharacterEllipsis,
-            };
-            Canvas.SetLeft(titleText, Left);
-            Canvas.SetTop(titleText, 928);
-            root.Children.Add(titleText);
-
-            var artistText = new TextBlock
-            {
-                Text = artist ?? "", Width = ArtSize, FontSize = 36, Foreground = new SolidColorBrush(Color.FromArgb(185, 255, 255, 255)),
-                FontFamily = new FontFamily("Segoe UI"), TextTrimming = TextTrimming.CharacterEllipsis,
-            };
-            Canvas.SetLeft(artistText, Left);
-            Canvas.SetTop(artistText, 1000);
-            root.Children.Add(artistText);
-
-            // pasek postępu
-            if (duration > 0)
-            {
-                double frac = Math.Clamp(position / duration, 0, 1);
-                var track = new Rectangle { Width = ArtSize, Height = 10, RadiusX = 5, RadiusY = 5, Fill = new SolidColorBrush(Color.FromArgb(60, 255, 255, 255)) };
-                Canvas.SetLeft(track, Left);
-                Canvas.SetTop(track, 1090);
-                root.Children.Add(track);
-                var fill = new Rectangle { Width = Math.Max(10, ArtSize * frac), Height = 10, RadiusX = 5, RadiusY = 5, Fill = new SolidColorBrush(Bright(accent)) };
-                Canvas.SetLeft(fill, Left);
-                Canvas.SetTop(fill, 1090);
-                root.Children.Add(fill);
-
-                var timeBrush = new SolidColorBrush(Color.FromArgb(150, 255, 255, 255));
-                var t1 = new TextBlock { Text = Time(position), FontSize = 26, Foreground = timeBrush, FontFamily = new FontFamily("Segoe UI") };
-                Canvas.SetLeft(t1, Left);
-                Canvas.SetTop(t1, 1114);
-                root.Children.Add(t1);
-                var t2 = new TextBlock { Text = Time(duration), FontSize = 26, Foreground = timeBrush, FontFamily = new FontFamily("Segoe UI"),
-                                         Width = 200, TextAlignment = TextAlignment.Right };
-                Canvas.SetLeft(t2, Left + ArtSize - 200);
-                Canvas.SetTop(t2, 1114);
-                root.Children.Add(t2);
-            }
-
             // podpis: słupki + odręczne „isabelle”
-            var footer = new StackPanel { Orientation = Orientation.Horizontal };
-            var bars = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-            foreach (var (h, c) in new[] { (18.0, Colors.White), (34.0, Color.FromRgb(255, 92, 160)), (24.0, Colors.White) })
-                bars.Children.Add(new Rectangle { Width = 7, Height = h, RadiusX = 3.5, RadiusY = 3.5, Fill = new SolidColorBrush(c),
-                                                  Margin = new Thickness(0, 0, 5, 0), VerticalAlignment = VerticalAlignment.Center });
-            footer.Children.Add(bars);
-            var logo = new System.Windows.Shapes.Path
+            var footer = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 40, 0, 0) };
+            foreach (var (h, col) in new[] { (16.0, Colors.White), (30.0, Color.FromRgb(255, 92, 160)), (22.0, Colors.White) })
+                footer.Children.Add(new Rectangle { Width = 6, Height = h, RadiusX = 3, RadiusY = 3, Fill = new SolidColorBrush(col),
+                                                    Margin = new Thickness(0, 0, 5, 0), VerticalAlignment = VerticalAlignment.Center });
+            footer.Children.Add(new System.Windows.Shapes.Path
             {
-                Data = Geometry.Parse(IslandWindow.HandwritingPath), Stretch = Stretch.Uniform, Height = 40,
-                Stroke = new SolidColorBrush(Color.FromArgb(230, 255, 255, 255)), StrokeThickness = 3.2,
+                Data = Geometry.Parse(IslandWindow.HandwritingPath + " M 33 37 L 33.2 37.2"), Stretch = Stretch.Uniform, Height = 34,
+                Stroke = Brushes.White, StrokeThickness = 3,
                 StrokeLineJoin = PenLineJoin.Round, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
-                Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
-            };
-            footer.Children.Add(logo);
-            footer.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            Canvas.SetLeft(footer, (W - footer.DesiredSize.Width) / 2);
-            Canvas.SetTop(footer, 1238);
-            root.Children.Add(footer);
+                Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+            });
+            stack.Children.Add(footer);
+
+            card.Measure(new Size(CardW, double.PositiveInfinity));
+            Canvas.SetLeft(card, (W - CardW) / 2);
+            Canvas.SetTop(card, (H - card.DesiredSize.Height) / 2);
+            root.Children.Add(card);
 
             root.Measure(new Size(W, H));
             root.Arrange(new Rect(0, 0, W, H));
@@ -191,20 +144,7 @@ namespace IslandPlayer
             return clean.Length > 80 ? clean.Substring(0, 80).Trim() : clean;
         }
 
-        private static string Time(double s)
-        {
-            var t = TimeSpan.FromSeconds(Math.Max(0, s));
-            return t.TotalHours >= 1 ? t.ToString(@"h\:mm\:ss") : t.ToString(@"m\:ss");
-        }
-
         private static Color Mix(Color a, Color b, double k) =>
             Color.FromRgb((byte)(a.R + (b.R - a.R) * k), (byte)(a.G + (b.G - a.G) * k), (byte)(a.B + (b.B - a.B) * k));
-
-        /// <summary>Kolor akcentu podniesiony do jasności, żeby był widoczny na ciemnym tle.</summary>
-        private static Color Bright(Color c)
-        {
-            double max = Math.Max(c.R, Math.Max(c.G, c.B));
-            return max < 140 ? Mix(c, Colors.White, 0.45) : c;
-        }
     }
 }

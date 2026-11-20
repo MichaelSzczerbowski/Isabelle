@@ -1223,7 +1223,7 @@ namespace IslandPlayer
             if (snap == null || string.IsNullOrWhiteSpace(snap.Title)) return;
             try
             {
-                var card = ShareCard.Render(_cover, snap.Title, snap.Artist, snap.PositionNow(DateTime.UtcNow), snap.Duration, _accent);
+                var card = ShareCard.Render(_cover, snap.Title, snap.Artist, _cover != null ? _coverAccent : _accent);
                 ShareCard.SaveAndCopy(card, snap.Title, snap.Artist);
             }
             catch (Exception ex)
