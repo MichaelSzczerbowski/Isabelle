@@ -223,6 +223,7 @@ namespace IslandPlayer
             {
                 CompositionTarget.Rendering -= OnFrame;
                 _island.KeepPlayingAfter(_wasPlaying);
+                App.TrimMemorySoon();
             };
         }
 

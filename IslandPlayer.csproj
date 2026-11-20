@@ -16,6 +16,14 @@
     <Product>Isabelle</Product>
     <Version>1.5.0</Version>
     <Description>Dynamic Island music player for Windows</Description>
+    <!-- wydajność: aplikacja działa w tle cały dzień -->
+    <!-- mniej pamięci i bez dodatkowego wątku GC w tle -->
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <TieredPGO>true</TieredPGO>
+    <!-- szybszy start wydanej wersji (kod skompilowany z góry) -->
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <!-- bez tłumaczeń systemowych bibliotek na kilkanaście języków - mniejszy plik -->
+    <SatelliteResourceLanguages>en;pl</SatelliteResourceLanguages>
   </PropertyGroup>
 
   <ItemGroup>

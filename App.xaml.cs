@@ -117,7 +117,7 @@ namespace IslandPlayer
                 return;
             }
             app._settingsWindow = new SettingsWindow(welcome);
-            app._settingsWindow.Closed += (s, e) => app._settingsWindow = null;
+            app._settingsWindow.Closed += (s, e) => { app._settingsWindow = null; TrimMemorySoon(); };
             app._settingsWindow.Show();
             app._settingsWindow.Activate();
         }
@@ -147,6 +147,31 @@ namespace IslandPlayer
         private const string QuitEventName = "Isabelle_Quit_7F3A9C";
 
         /// <summary>Prosi działającą kopię Isabelle o zamknięcie. False = żadna nie działa.</summary>
+        [System.Runtime.InteropServices.DllImport("psapi.dll")]
+        private static extern bool EmptyWorkingSet(IntPtr hProcess);
+
+        /// <summary>
+        /// Po zamknięciu dużego okna (Moja muzyka, pełny ekran, ustawienia) oddajemy pamięć systemowi -
+        /// Isabelle siedzi w tle cały dzień, więc nie powinna trzymać zbędnych megabajtów.
+        /// </summary>
+        public static void TrimMemorySoon()
+        {
+            var t = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.ApplicationIdle) { Interval = TimeSpan.FromSeconds(3) };
+            t.Tick += (s, e) =>
+            {
+                t.Stop();
+                try
+                {
+                    System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+                    GC.Collect(2, GCCollectionMode.Forced, false, true);
+                    using var p = System.Diagnostics.Process.GetCurrentProcess();
+                    EmptyWorkingSet(p.Handle);
+                }
+                catch { }
+            };
+            t.Start();
+        }
+
         public static bool SignalQuit()
         {
             try

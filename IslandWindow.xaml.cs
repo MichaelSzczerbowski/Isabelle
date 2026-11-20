@@ -1068,6 +1068,8 @@ namespace IslandPlayer
             CompositionTarget.Rendering += OnRendering;
         }
 
+        private bool _midFps;
+
         private void StopLoop()
         {
             if (!_loopOn) return;
@@ -1132,6 +1134,9 @@ namespace IslandPlayer
             double t = _clock.Elapsed.TotalSeconds;
             // gdy wyspa stoi w miejscu (grają tylko słupki) wystarczy 30 klatek na sekundę
             if (_lowFps && t - _lastFrame < 1.0 / 30) return;
+            // rozwinięta wyspa stoi (gra tło, tekst) - na monitorach 120/144 Hz wystarczy 60 kl./s;
+            // ruch, przeciąganie i zmiana rozmiaru dalej idą z pełną płynnością monitora
+            if (_midFps && t - _lastFrame < 1.0 / 62) return;
             double dt = t - _lastFrame;
             _lastFrame = t;
             int steps = (int)Math.Round(dt * 60);
@@ -1317,6 +1322,7 @@ namespace IslandPlayer
                 _settledSince = 0;
             }
             _lowFps = croppable;
+            _midFps = !croppable && settled && !_dragging && !_moving;
             needed = needed || (croppable && _crop == null) || st || StartupView.Opacity > 0;
 
             if (!needed) StopLoop();
@@ -1935,14 +1941,22 @@ namespace IslandPlayer
         }
 
         // ================= co 250 ms =================
+        private int _clockMinute = -1;
+
         private void SlowTick()
         {
             _slowTicks++;
             try
             {
                 var now = DateTime.Now;
-                IdleClock.Text = now.ToString("HH:mm");
-                IdleVClock.Text = now.ToString("HH") + "\n" + now.ToString("mm");
+                // zegar zmienia się raz na minutę - nie przerysowujemy go 4 razy na sekundę
+                int minute = now.Hour * 60 + now.Minute;
+                if (minute != _clockMinute)
+                {
+                    _clockMinute = minute;
+                    IdleClock.Text = now.ToString("HH:mm");
+                    IdleVClock.Text = now.ToString("HH") + "\n" + now.ToString("mm");
+                }
 
                 if (_snap != null && _coverKey != null && _coverKey != _snap.Key) ClearCover();
                 if (_snap == null && _cover != null) ClearCover();

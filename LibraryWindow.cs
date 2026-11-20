@@ -195,7 +195,7 @@ namespace IslandPlayer
             var colorTick = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             colorTick.Tick += (s, e) => UpdateGlass();
             colorTick.Start();
-            Closed += (s, e) => colorTick.Stop();
+            Closed += (s, e) => { colorTick.Stop(); App.TrimMemorySoon(); };
             UpdateGlass();
             LibraryService.Changed += OnLibraryChanged;
             Closed += (s, e) => LibraryService.Changed -= OnLibraryChanged;

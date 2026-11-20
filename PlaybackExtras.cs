@@ -47,13 +47,17 @@ namespace IslandPlayer
         private void Tick()
         {
             var now = DateTime.UtcNow;
-            double dt = Math.Min(0.25, (now - _last).TotalSeconds);
+            double dt = Math.Min(0.6, (now - _last).TotalSeconds);
             _last = now;
+            // 20 razy na sekundę tylko wtedy, gdy coś płynnie zmienia głośność; inaczej 2 razy na sekundę wystarczy
+            var c = App.Config;
+            var want = TimeSpan.FromMilliseconds((c.NormalizeVolume || c.SmoothTransitions) && _island.Playing ? 50 : 500);
+            if (_timer.Interval != want) _timer.Interval = want;
             try
             {
                 Screensaver();
                 Shape(now, dt);
-                if ((now - _lastAutoPause).TotalMilliseconds >= 500) { _lastAutoPause = now; AutoPause(now); }
+                if ((now - _lastAutoPause).TotalMilliseconds >= 450) { _lastAutoPause = now; AutoPause(now); }
             }
             catch (Exception ex)
             {
