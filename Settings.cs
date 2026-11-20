@@ -62,6 +62,14 @@ namespace IslandPlayer
         /// <summary>Tryb pełnoekranowy, gdy komputer jest bezczynny, a muzyka gra.</summary>
         public bool MusicScreensaver { get; set; }
         public int ScreensaverMinutes { get; set; } = 3;
+        /// <summary>Gdy zacznie grać inna aplikacja (np. film w przeglądarce), muzyka się pauzuje i potem wraca.</summary>
+        public bool AutoPause { get; set; }
+        /// <summary>Osobna zapamiętana głośność dla każdego odtwarzacza.</summary>
+        public bool RememberAppVolume { get; set; }
+        public Dictionary<string, float> AppVolumes { get; set; } = new Dictionary<string, float>();
+        /// <summary>Okładka obecnej piosenki na ekranie blokady.</summary>
+        public bool LockScreenCover { get; set; }
+        public bool LockScreenActive { get; set; }
         /// <summary>Szybkie przesunięcie wyspy w bok (myszą albo dwoma palcami na touchpadzie) zmienia utwór.</summary>
         public bool Gestures { get; set; } = true;
         // ---- personalizacja ----

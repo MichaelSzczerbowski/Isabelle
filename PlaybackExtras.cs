@@ -7,13 +7,15 @@ namespace IslandPlayer
     /// Opcje odtwarzania działające w tle:
     ///  • wyrównywanie głośności - cichsze i głośniejsze utwory grają podobnie,
     ///  • płynne przejścia - wyciszenie końca utworu i rozjaśnienie początku następnego,
-    ///  • wygaszacz z muzyką - tryb pełnoekranowy, gdy komputer leży bezczynnie, a coś gra.
+    ///  • wygaszacz z muzyką - tryb pełnoekranowy, gdy komputer leży bezczynnie, a coś gra,
+    ///  • auto-pauza - gdy zacznie grać inna aplikacja, muzyka czeka, a potem sama wraca.
     /// Głośność zmieniamy tylko samemu odtwarzaczowi (sesja w mikserze), nigdy całemu komputerowi.
     /// </summary>
     public sealed class PlaybackExtras
     {
         private readonly IslandWindow _island;
         private readonly AudioService _audio;
+        private readonly MediaService _media;
         private readonly DispatcherTimer _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
         private DateTime _last = DateTime.UtcNow;
 
@@ -27,10 +29,11 @@ namespace IslandPlayer
         private DateTime _keyAt = DateTime.UtcNow;
         private double _trackLevel, _refLevel, _measured;
 
-        public PlaybackExtras(IslandWindow island, AudioService audio)
+        public PlaybackExtras(IslandWindow island, AudioService audio, MediaService media)
         {
             _island = island;
             _audio = audio;
+            _media = media;
             _timer.Tick += (s, e) => Tick();
             _timer.Start();
         }
@@ -50,10 +53,69 @@ namespace IslandPlayer
             {
                 Screensaver();
                 Shape(now, dt);
+                if ((now - _lastAutoPause).TotalMilliseconds >= 500) { _lastAutoPause = now; AutoPause(now); }
             }
             catch (Exception ex)
             {
                 Log.Error(ex);
+            }
+        }
+
+        // ================= auto-pauza =================
+        private DateTime _lastAutoPause = DateTime.MinValue;
+        private readonly System.Collections.Generic.Dictionary<string, DateTime> _playingSince = new System.Collections.Generic.Dictionary<string, DateTime>();
+        private string _pausedApp;            // aplikacja, którą zatrzymaliśmy
+        private DateTime _othersQuietSince = DateTime.MinValue;
+
+        private void AutoPause(DateTime now)
+        {
+            if (!App.Config.AutoPause)
+            {
+                _pausedApp = null;
+                _playingSince.Clear();
+                return;
+            }
+            var states = _media.SessionStates();
+            var playing = new System.Collections.Generic.HashSet<string>();
+            foreach (var (app, isPlaying) in states)
+                if (isPlaying && app.Length > 0) playing.Add(app);
+            foreach (var app in playing)
+                if (!_playingSince.ContainsKey(app)) _playingSince[app] = now;
+            foreach (var app in new System.Collections.Generic.List<string>(_playingSince.Keys))
+                if (!playing.Contains(app)) _playingSince.Remove(app);
+
+            if (_pausedApp == null)
+            {
+                // gra więcej niż jedna aplikacja: zatrzymujemy tę, która grała wcześniej (nowa wygrywa)
+                if (playing.Count < 2) return;
+                string oldest = null, newest = null;
+                foreach (var kv in _playingSince)
+                {
+                    if (oldest == null || kv.Value < _playingSince[oldest]) oldest = kv.Key;
+                    if (newest == null || kv.Value > _playingSince[newest]) newest = kv.Key;
+                }
+                if (oldest == null || newest == null || oldest == newest) return;
+                if ((now - _playingSince[newest]).TotalSeconds < 1) return;     // krótkie dźwięki nie przerywają muzyki
+                _media.PauseApp(oldest);
+                _pausedApp = oldest;
+                _othersQuietSince = DateTime.MinValue;
+                return;
+            }
+
+            bool stillThere = false;
+            foreach (var (app, _) in states) if (app == _pausedApp) stillThere = true;
+            if (!stillThere || playing.Contains(_pausedApp))
+            {
+                // odtwarzacz zamknięty albo ktoś sam go wznowił - już nie pilnujemy
+                _pausedApp = null;
+                return;
+            }
+            if (playing.Count > 0) { _othersQuietSince = DateTime.MinValue; return; }
+            if (_othersQuietSince == DateTime.MinValue) _othersQuietSince = now;
+            if ((now - _othersQuietSince).TotalSeconds >= 2.5)
+            {
+                _media.PlayApp(_pausedApp);
+                _pausedApp = null;
             }
         }
 

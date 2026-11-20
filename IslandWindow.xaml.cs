@@ -97,6 +97,12 @@ namespace IslandPlayer
                 if (App.Config.AlbumWallpaper && _cover != null && _snap != null && IsPlaying)
                     WallpaperService.Apply(_cover, _snap.Title, _snap.Artist);
             };
+            _lockTimer.Tick += (s, e) =>
+            {
+                _lockTimer.Stop();
+                if (App.Config.LockScreenCover && _cover != null && _snap != null && _coverKey == _snap.Key)
+                    LockScreenService.Apply(_cover, _snap.Title, _snap.Artist);
+            };
 
             Pill.MouseEnter += (s, e) => { _hover = true; _collapseTimer.Stop(); if (!_expanded && !_moving && !App.Config.DotMode && !App.Config.ClickToOpen) _expandTimer.Start(); };
             Pill.MouseLeave += (s, e) =>
@@ -255,7 +261,7 @@ namespace IslandPlayer
             }
             ApplySettings();
             _audio = new AudioService(Dispatcher);
-            _extras = new PlaybackExtras(this, _audio);
+            _extras = new PlaybackExtras(this, _audio, _media);
             _audio.VolumeChanged += (v, m) => ShowVolume(v, m);
 
             _media.Updated += snap => Dispatcher.BeginInvoke(new Action(() => OnSnapshot(snap)));
@@ -387,6 +393,7 @@ namespace IslandPlayer
                 _overlay.Stop();
                 _discord.Dispose();
                 if (App.Config.WallpaperActive) WallpaperService.Restore(wait: true);
+                if (App.Config.LockScreenActive) LockScreenService.Restore(wait: true);
                 if (_ducked && _audio != null) _audio.Volume = _duckSaved;
                 _audio?.Dispose();
             }
@@ -447,7 +454,20 @@ namespace IslandPlayer
             ToastVTitle.Text = snap.Title;
             ToastVArtist.Text = snap.Artist;
             AppText.Text = MediaService.PrettyAppName(snap.AppId);
-            if (_audio != null) _audio.TargetApp = snap.AppId;
+            if (_audio != null)
+            {
+                string prevApp = _audio.TargetApp;
+                if (App.Config.RememberAppVolume && prevApp != snap.AppId)
+                {
+                    // każdy odtwarzacz ma swoją głośność: zapisz starą, przywróć zapamiętaną dla nowego
+                    var vols = App.Config.AppVolumes ??= new Dictionary<string, float>();
+                    if (!string.IsNullOrEmpty(prevApp)) vols[prevApp] = _audio.Volume;
+                    _audio.TargetApp = snap.AppId;
+                    if (vols.TryGetValue(snap.AppId, out float saved)) _audio.Volume = saved;
+                    App.Config.Save();
+                }
+                _audio.TargetApp = snap.AppId;
+            }
             AppBtn.Visibility = snap.Apps.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
             UpdatePlayIcon();
             UpdateLyricsButton();
@@ -477,6 +497,7 @@ namespace IslandPlayer
             _cover = bmp;
             _coverKey = key;
             if (App.Config.AlbumWallpaper) { _wallTimer.Stop(); _wallTimer.Start(); }
+            if (App.Config.LockScreenCover) { _lockTimer.Stop(); _lockTimer.Start(); }
             ArtBrush.ImageSource = bmp;
             CompactArtBrush.ImageSource = bmp;
             ToastArtBrush.ImageSource = bmp;
@@ -1701,6 +1722,8 @@ namespace IslandPlayer
         private readonly DiscordPresence _discord = new DiscordPresence();
         private bool _fgFullscreen;
         private readonly DispatcherTimer _wallTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.5) };
+        private readonly DispatcherTimer _lockTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        private bool _lockWasOn;
         private DateTime _lastPlayingAt = DateTime.UtcNow;
         private bool _micActive, _pausedByMic, _ducked;
         private float _duckSaved;
@@ -1731,6 +1754,10 @@ namespace IslandPlayer
             if (!c.AlbumWallpaper && c.WallpaperActive) WallpaperService.Restore();
             else if (c.AlbumWallpaper && !_wallpaperWasOn && _cover != null && IsPlaying) { _wallTimer.Stop(); _wallTimer.Start(); }
             _wallpaperWasOn = c.AlbumWallpaper;
+
+            if (!c.LockScreenCover && c.LockScreenActive) LockScreenService.Restore();
+            else if (c.LockScreenCover && !_lockWasOn && _cover != null) { _lockTimer.Stop(); _lockTimer.Start(); }
+            _lockWasOn = c.LockScreenCover;
 
             if (!c.MicDuck) EndMicDuck();
         }

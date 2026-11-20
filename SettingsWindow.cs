@@ -519,6 +519,10 @@ namespace IslandPlayer
 
             // ---- tapeta ----
             var w = Group(p, L.T("PULPIT", "DESKTOP"));
+            Toggle(w, L.T("Okładka na ekranie blokady", "Cover on the lock screen"),
+                L.T("po zablokowaniu komputera widać okładkę i tytuł obecnej piosenki; po wyłączeniu wraca Twój obraz",
+                    "when the PC is locked you see the current cover and title; your image comes back when turned off"),
+                c.LockScreenCover, v => c.LockScreenCover = v);
             Toggle(w, L.T("Tapeta z okładki", "Album wallpaper"),
                 L.T("podczas słuchania tapeta mieni się kolorami okładki; po minucie ciszy wraca Twoja tapeta", "while listening the wallpaper shows the cover's colors; your wallpaper comes back after a minute of silence"),
                 c.AlbumWallpaper, v => c.AlbumWallpaper = v);
@@ -537,6 +541,13 @@ namespace IslandPlayer
                 L.T("ciche i głośne utwory grają podobnie głośno (zmienia tylko głośność odtwarzacza)",
                     "quiet and loud tracks play at a similar volume (changes only the player's volume)"),
                 c.NormalizeVolume, v => c.NormalizeVolume = v);
+            Toggle(g, L.T("Auto-pauza", "Auto-pause"),
+                L.T("gdy zacznie grać coś innego (np. film na YouTube), muzyka się zatrzyma i sama wróci, gdy tamto ucichnie",
+                    "when something else starts playing (e.g. a YouTube video), music pauses and resumes once it stops"),
+                c.AutoPause, v => c.AutoPause = v);
+            Toggle(g, L.T("Pamiętaj głośność odtwarzaczy", "Remember player volume"),
+                L.T("Spotify, przeglądarka i inne mają osobno zapamiętaną głośność", "Spotify, the browser and others each keep their own volume"),
+                c.RememberAppVolume, v => c.RememberAppVolume = v);
             Toggle(g, L.T("Płynne przejścia", "Smooth transitions"),
                 L.T("koniec utworu łagodnie cichnie, a następny płynnie się rozkręca",
                     "the end of a track fades out gently and the next one fades in"),

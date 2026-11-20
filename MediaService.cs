@@ -302,6 +302,48 @@ namespace IslandPlayer
             Run(async s => await s.TryChangePlaybackPositionAsync((long)(seconds * 10_000_000)));
         }
 
+        // ---- auto-pauza: stan wszystkich odtwarzaczy i sterowanie konkretnym ----
+        /// <summary>Lista (aplikacja, czy gra) dla wszystkich sesji multimediów.</summary>
+        public List<(string app, bool playing)> SessionStates()
+        {
+            var list = new List<(string, bool)>();
+            try
+            {
+                if (_mgr == null) return list;
+                foreach (var s in _mgr.GetSessions())
+                {
+                    bool playing = false;
+                    try { playing = s.GetPlaybackInfo()?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing; }
+                    catch { }
+                    list.Add((s.SourceAppUserModelId ?? "", playing));
+                }
+            }
+            catch { }
+            return list;
+        }
+
+        public void PauseApp(string app) => ControlApp(app, true);
+        public void PlayApp(string app) => ControlApp(app, false);
+
+        private void ControlApp(string app, bool pause)
+        {
+            Task.Run(async () =>
+            {
+                try
+                {
+                    if (_mgr == null) return;
+                    foreach (var s in _mgr.GetSessions())
+                    {
+                        if ((s.SourceAppUserModelId ?? "") != app) continue;
+                        if (pause) await s.TryPauseAsync(); else await s.TryPlayAsync();
+                        break;
+                    }
+                }
+                catch (Exception ex) { Log.Error(ex); }
+                Poke();
+            });
+        }
+
         public void CycleApp()
         {
             var apps = _apps;
