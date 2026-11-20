@@ -23,13 +23,16 @@ namespace IslandPlayer
         /// </summary>
         public static void OpenFromIsland(Point screenPx)
         {
-            bool fresh = _current == null;
-            if (fresh)
+            // już otwarte - tylko wyciągamy na wierzch (bez ponownej animacji, która dawała mignięcie)
+            if (_current != null)
             {
-                _current = new LibraryWindow();
-                _current.Closed += (s, e) => _current = null;
+                if (_current.WindowState == WindowState.Minimized) _current.WindowState = WindowState.Normal;
+                _current.Activate();
+                return;
             }
-            var w = _current;
+            var w = new LibraryWindow();
+            _current = w;
+            w.Closed += (s, e) => _current = null;
             // piksele ekranu → jednostki WPF (skala monitora)
             var src = PresentationSource.FromVisual(App.Island);
             double sx = src?.CompositionTarget?.TransformFromDevice.M11 ?? 1, sy = src?.CompositionTarget?.TransformFromDevice.M22 ?? 1;
@@ -40,26 +43,45 @@ namespace IslandPlayer
             // okno ma 18 px marginesu na cień - wyrównujemy samą kartę
             w.Left = Math.Clamp(x - w.Width / 2, areaL, Math.Max(areaL, areaR - w.Width));
             w.Top = Math.Clamp(y - 8, areaT, Math.Max(areaT, areaB - w.Height));
-            if (fresh) w.Show();
+            // stan początkowy ustawiamy PRZED pokazaniem - pierwsza klatka jest niewidoczna i już pomniejszona,
+            // więc nie ma mignięcia pełnego okna przed startem animacji
+            var origin = new Point(x - w.Left, Math.Max(0, y - w.Top));
+            w.Opacity = 0;
+            w.PrepareIn(origin);
+            w.ContentRendered += (s, e) =>
+                // start dopiero po pierwszym wyrenderowaniu (budowa list, szkło), żeby animacja nie gubiła klatek
+                w.Dispatcher.BeginInvoke(new Action(w.PlayIn), System.Windows.Threading.DispatcherPriority.Background);
+            w.Show();
             w.Activate();
-            w.AnimateIn(new Point(x - w.Left, Math.Max(0, y - w.Top)));
+        }
+
+        private ScaleTransform _inScale;
+
+        /// <summary>Karta pomniejszona przy punkcie pod wyspą, gotowa do „wysunięcia się”.</summary>
+        private void PrepareIn(Point origin)
+        {
+            if (!(Content is FrameworkElement root)) return;
+            root.RenderTransformOrigin = new Point(Math.Clamp(origin.X / Width, 0, 1), Math.Clamp(origin.Y / Height, 0, 1));
+            _inScale = new ScaleTransform(0.86, 0.6);
+            root.RenderTransform = _inScale;
         }
 
         /// <summary>Wejście: karta rośnie z punktu pod wyspą i się pojawia.</summary>
-        private void AnimateIn(Point origin)
+        private void PlayIn()
         {
-            if (!(Content is FrameworkElement root) || ActualWidth <= 0 && Width <= 0) return;
-            double w = ActualWidth > 0 ? ActualWidth : Width, h = ActualHeight > 0 ? ActualHeight : Height;
-            root.RenderTransformOrigin = new Point(Math.Clamp(origin.X / w, 0, 1), Math.Clamp(origin.Y / h, 0, 1));
-            var sc = new ScaleTransform(0.86, 0.6);
-            root.RenderTransform = sc;
-            var d = TimeSpan.FromMilliseconds(320);
+            var d = TimeSpan.FromMilliseconds(340);
             var ease = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut };
-            var back = new System.Windows.Media.Animation.BackEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut, Amplitude = 0.25 };
-            sc.BeginAnimation(ScaleTransform.ScaleXProperty, new System.Windows.Media.Animation.DoubleAnimation(1, d) { EasingFunction = back });
-            sc.BeginAnimation(ScaleTransform.ScaleYProperty, new System.Windows.Media.Animation.DoubleAnimation(1, d) { EasingFunction = back });
-            root.Opacity = 0;
-            root.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(1, TimeSpan.FromMilliseconds(200)) { EasingFunction = ease });
+            var back = new System.Windows.Media.Animation.BackEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut, Amplitude = 0.2 };
+            if (_inScale != null)
+            {
+                var ax = new System.Windows.Media.Animation.DoubleAnimation(1, d) { EasingFunction = back };
+                ax.Completed += (s, e) => { if (Content is FrameworkElement r) r.RenderTransform = Transform.Identity; };
+                _inScale.BeginAnimation(ScaleTransform.ScaleXProperty, ax);
+                _inScale.BeginAnimation(ScaleTransform.ScaleYProperty, new System.Windows.Media.Animation.DoubleAnimation(1, d) { EasingFunction = back });
+            }
+            var fade = new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(220)) { EasingFunction = ease };
+            fade.Completed += (s, e) => { BeginAnimation(OpacityProperty, null); Opacity = 1; };
+            BeginAnimation(OpacityProperty, fade);
         }
 
         public static void ShowWindow()
