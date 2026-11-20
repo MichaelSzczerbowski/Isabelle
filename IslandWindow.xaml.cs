@@ -20,6 +20,7 @@ namespace IslandPlayer
 
         private readonly MediaService _media = new MediaService();
         private AudioService _audio;
+        private PlaybackExtras _extras;
         private IntPtr _hwnd;
 
         private MediaSnapshot _snap;
@@ -254,6 +255,7 @@ namespace IslandPlayer
             }
             ApplySettings();
             _audio = new AudioService(Dispatcher);
+            _extras = new PlaybackExtras(this, _audio);
             _audio.VolumeChanged += (v, m) => ShowVolume(v, m);
 
             _media.Updated += snap => Dispatcher.BeginInvoke(new Action(() => OnSnapshot(snap)));
@@ -374,6 +376,7 @@ namespace IslandPlayer
 
         public void Cleanup()
         {
+            try { _extras?.Stop(); } catch { }
             try
             {
                 if (_hwnd != IntPtr.Zero)
@@ -590,6 +593,8 @@ namespace IslandPlayer
         public double Position => DisplayPosition();
         public bool Playing => IsPlaying;
         public (double level, double max) AudioLevel => (_peakS, _peakMax);
+        public bool MicBusy => _micActive;
+        public bool ForegroundFullscreen => _fgFullscreen && !FullscreenPlayer.IsOpen;
         public void TogglePlay() => PlayPause();
         public void Next() => _media.Next();
         public void Previous() => _media.Previous();

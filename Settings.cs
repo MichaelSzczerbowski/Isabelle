@@ -55,6 +55,13 @@ namespace IslandPlayer
         public bool ClickToPin { get; set; }
         /// <summary>Najechanie myszką nie otwiera odtwarzacza - tylko kliknięcie.</summary>
         public bool ClickToOpen { get; set; }
+        /// <summary>Wyrównywanie głośności między utworami (tylko głośność odtwarzacza).</summary>
+        public bool NormalizeVolume { get; set; }
+        /// <summary>Wyciszenie końca utworu i rozjaśnienie początku następnego.</summary>
+        public bool SmoothTransitions { get; set; }
+        /// <summary>Tryb pełnoekranowy, gdy komputer jest bezczynny, a muzyka gra.</summary>
+        public bool MusicScreensaver { get; set; }
+        public int ScreensaverMinutes { get; set; } = 3;
         /// <summary>Szybkie przesunięcie wyspy w bok (myszą albo dwoma palcami na touchpadzie) zmienia utwór.</summary>
         public bool Gestures { get; set; } = true;
         // ---- personalizacja ----

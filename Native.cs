@@ -103,6 +103,18 @@ namespace IslandPlayer
         }
 
         /// <summary>True, gdy aktywne okno (gra, film) zajmuje cały monitor, na którym jest wyspa.</summary>
+        [StructLayout(LayoutKind.Sequential)]
+        private struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
+        [DllImport("user32.dll")] private static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
+
+        /// <summary>Ile sekund minęło od ostatniego ruchu myszy / klawisza (w całym systemie).</summary>
+        public static double IdleSeconds()
+        {
+            var li = new LASTINPUTINFO { cbSize = (uint)Marshal.SizeOf<LASTINPUTINFO>() };
+            if (!GetLastInputInfo(ref li)) return 0;
+            return unchecked((uint)Environment.TickCount - li.dwTime) / 1000.0;
+        }
+
         public static bool IsForegroundFullscreen(IntPtr own)
         {
             IntPtr fg = GetForegroundWindow();

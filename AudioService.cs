@@ -255,6 +255,9 @@ namespace IslandPlayer
             }
         }
 
+        /// <summary>Trwa płynna pauza / wznowienie (wtedy nikt inny nie rusza głośności).</summary>
+        public bool Fading => _fading;
+
         /// <summary>Czy zmiana dotyczy samego odtwarzacza (do podpisu w wyspie).</summary>
         public bool IsAppVolume => UseApp && AppSessions().Count > 0;
 

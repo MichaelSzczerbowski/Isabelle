@@ -309,6 +309,13 @@ namespace IslandPlayer
                 L.T("szybko przesuń wyspę w lewo lub w prawo (albo dwoma palcami na touchpadzie), żeby zmienić utwór",
                     "flick the island left or right (or swipe with two fingers on a touchpad) to change the track"),
                 c.Gestures, v => c.Gestures = v);
+            Toggle(g, L.T("Wygaszacz z muzyką", "Music screensaver"),
+                L.T("gdy coś gra, a komputer leży bezczynnie, włącza się tryb pełnoekranowy; ruch myszy go zamyka",
+                    "while music plays and the PC is idle, the full-screen mode turns on; moving the mouse closes it"),
+                c.MusicScreensaver, v => c.MusicScreensaver = v);
+            Segment(g, L.T("Wygaszacz po", "Screensaver after"), null,
+                new[] { ("1", "1 min"), ("3", "3 min"), ("5", "5 min"), ("10", "10 min") },
+                c.ScreensaverMinutes.ToString(), v => c.ScreensaverMinutes = int.Parse(v));
             Toggle(g, L.T("Tryb kropki", "Dot mode"), L.T("zawsze mała kropka – odtwarzacz otwiera się po kliknięciu", "always a tiny dot – the player opens on click"),
                 c.DotMode, v => c.DotMode = v);
 
@@ -526,6 +533,14 @@ namespace IslandPlayer
             var g = Group(p, null);
             Toggle(g, L.T("Głośność kółkiem myszy", "Mouse wheel volume"), L.T("przewiń nad wyspą", "scroll over the island"),
                 c.WheelVolume, v => c.WheelVolume = v);
+            Toggle(g, L.T("Wyrównywanie głośności", "Volume leveling"),
+                L.T("ciche i głośne utwory grają podobnie głośno (zmienia tylko głośność odtwarzacza)",
+                    "quiet and loud tracks play at a similar volume (changes only the player's volume)"),
+                c.NormalizeVolume, v => c.NormalizeVolume = v);
+            Toggle(g, L.T("Płynne przejścia", "Smooth transitions"),
+                L.T("koniec utworu łagodnie cichnie, a następny płynnie się rozkręca",
+                    "the end of a track fades out gently and the next one fades in"),
+                c.SmoothTransitions, v => c.SmoothTransitions = v);
             Toggle(g, L.T("Tylko głośność muzyki", "Music volume only"),
                 L.T("kółko zmienia głośność odtwarzacza (np. Spotify), a nie całego komputera", "the wheel changes the player's volume (e.g. Spotify), not the whole PC"),
                 c.AppVolume, v => c.AppVolume = v);

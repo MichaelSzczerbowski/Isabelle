@@ -24,6 +24,7 @@ A tiny black pill at the top of your screen that shows what's playing and grows 
 | 👆 | **Gestures** — flick the island sideways or swipe with two fingers on a touchpad to change tracks | **Gesty** — szybkie przesunięcie wyspy w bok (lub dwa palce na touchpadzie) zmienia utwór |
 | 🔊 | Mouse-wheel volume + volume indicator in the island (replaces the Windows OSD) | Głośność kółkiem myszy i wskaźnik w wyspie |
 | 🌙 | Smooth fade on pause / resume | Płynne ściszanie przy pauzie |
+| 🎚️ | Optional volume leveling, smooth track transitions and a music screensaver | Opcjonalnie: wyrównywanie głośności, płynne przejścia i wygaszacz z muzyką |
 | ⌨️ | Global hotkeys: `Ctrl+Alt+P`, `Ctrl+Alt+→`, `Ctrl+Alt+←` | Skróty klawiszowe |
 | 📍 | Drag the island to any screen edge (top, bottom, left, right) | Przeciągnij wyspę na dowolną krawędź ekranu |
 | 📺 | **OBS overlay** for streamers – cover, title and live lyrics on your stream | Nakładka OBS dla streamerów |

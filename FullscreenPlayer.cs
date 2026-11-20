@@ -24,8 +24,14 @@ namespace IslandPlayer
         public static void Toggle()
         {
             if (_current != null) { _current.Close(); return; }
-            if (App.Island?.Snapshot == null) return;
-            _current = new FullscreenPlayer();
+            Open(false);
+        }
+
+        /// <param name="screensaver">jako wygaszacz: zamyka się przy pierwszym ruchu myszy lub klawiszu</param>
+        public static void Open(bool screensaver)
+        {
+            if (_current != null || App.Island?.Snapshot == null) return;
+            _current = new FullscreenPlayer { _screensaver = screensaver };
             _current.Closed += (s, e) => _current = null;
             _current.Show();
             _current.Activate();
@@ -221,6 +227,8 @@ namespace IslandPlayer
         }
 
         private DateTime _manualUntil = DateTime.MinValue;
+        private bool _screensaver;
+        private readonly DateTime _openedAt = DateTime.UtcNow;
         private bool _wasPlaying;
 
         private Border RoundButton(string geo, double size, double icon, Action click, System.Windows.Shapes.Path custom = null,
@@ -286,6 +294,8 @@ namespace IslandPlayer
 
             var snap = _island.Snapshot;
             if (snap == null) { Close(); return; }
+            // wygaszacz: wystarczy ruszyć myszką albo nacisnąć klawisz
+            if (_screensaver && (now - _openedAt).TotalSeconds > 1.5 && Native.IdleSeconds() < 0.6) { Close(); return; }
 
             if (snap.Key != _key)
             {
