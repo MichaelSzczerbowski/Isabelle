@@ -185,12 +185,22 @@ namespace IslandPlayer
             }
         }
 
+        private string _placeKey;
+        private bool _wallpaperWasOn;
+
         public void ApplySettings()
         {
             var c = App.Config;
             double sc = Math.Clamp(c.Scale, 0.7, 1.6);
             RootScale.ScaleX = RootScale.ScaleY = sc;
-            PlaceWindow();
+            // okno przestawiamy tylko, gdy zmieniło się coś od położenia - inaczej każda zmiana ustawień
+            // rozwijała okno na pełny rozmiar i z powrotem (miganie)
+            string placeKey = c.Edge + "|" + sc + "|" + c.CustomPosition + "|" + c.AnchorX + "|" + c.AnchorY + "|" + c.MonitorName;
+            if (placeKey != _placeKey)
+            {
+                _placeKey = placeKey;
+                PlaceWindow();
+            }
 
             RegisterHotkeys();
             if (!c.VolumeOsd) Native.SetVolumeOsdVisible(true);
@@ -1012,7 +1022,7 @@ namespace IslandPlayer
             if (!on || !App.Config.AnimatedBackground)
             {
                 BgCover2.Opacity = 0;
-                _bgScale1.ScaleX = _bgScale1.ScaleY = 1;
+                _bgScale1.ScaleX = _bgScale1.ScaleY = 1.8; // mocno przybliżona - widać kolory, nie obrazek
                 _bgRot1.Angle = 0;
                 _bgMove1.X = _bgMove1.Y = 0;
                 return;
@@ -1022,18 +1032,18 @@ namespace IslandPlayer
             double level = _peakMax > 0.02 ? Math.Min(1, _peakS / Math.Max(0.05, _peakMax * 0.8)) : 0;
             double beat = playing ? level * 0.05 : 0;
 
-            double s1 = 1.08 + 0.05 * Math.Sin(a * 0.45) + beat;
+            double s1 = 2.1 + 0.12 * Math.Sin(a * 0.45) + beat * 2;
             _bgScale1.ScaleX = _bgScale1.ScaleY = s1;
             _bgRot1.Angle = (a * 6) % 360;
-            _bgMove1.X = 26 * Math.Sin(a * 0.31);
-            _bgMove1.Y = 18 * Math.Cos(a * 0.27);
+            _bgMove1.X = 60 * Math.Sin(a * 0.31);
+            _bgMove1.Y = 45 * Math.Cos(a * 0.27);
 
-            double s2 = 1.2 + 0.06 * Math.Cos(a * 0.38) + beat;
+            double s2 = 2.6 + 0.15 * Math.Cos(a * 0.38) + beat * 2;
             _bgScale2.ScaleX = -s2;   // lustrzane odbicie - inne plamy koloru
             _bgScale2.ScaleY = s2;
             _bgRot2.Angle = (-a * 4.5) % 360;
-            _bgMove2.X = 30 * Math.Cos(a * 0.23);
-            _bgMove2.Y = 22 * Math.Sin(a * 0.35);
+            _bgMove2.X = 70 * Math.Cos(a * 0.23);
+            _bgMove2.Y = 50 * Math.Sin(a * 0.35);
             BgCover2.Opacity = expOp * 0.6;
         }
 
@@ -1422,7 +1432,8 @@ namespace IslandPlayer
             if (!c.DiscordEnabled) _discord.Clear();
 
             if (!c.AlbumWallpaper && c.WallpaperActive) WallpaperService.Restore();
-            else if (c.AlbumWallpaper && _cover != null && IsPlaying) { _wallTimer.Stop(); _wallTimer.Start(); }
+            else if (c.AlbumWallpaper && !_wallpaperWasOn && _cover != null && IsPlaying) { _wallTimer.Stop(); _wallTimer.Start(); }
+            _wallpaperWasOn = c.AlbumWallpaper;
 
             if (!c.MicDuck) EndMicDuck();
         }
