@@ -97,7 +97,7 @@ namespace IslandPlayer
                     WallpaperService.Apply(_cover, _snap.Title, _snap.Artist);
             };
 
-            Pill.MouseEnter += (s, e) => { _hover = true; _collapseTimer.Stop(); if (!_expanded && !_moving && !App.Config.DotMode) _expandTimer.Start(); };
+            Pill.MouseEnter += (s, e) => { _hover = true; _collapseTimer.Stop(); if (!_expanded && !_moving && !App.Config.DotMode && !App.Config.ClickToOpen) _expandTimer.Start(); };
             Pill.MouseLeave += (s, e) =>
             {
                 _hover = false;

@@ -299,6 +299,9 @@ namespace IslandPlayer
                 c.CompactTitle, v => c.CompactTitle = v);
             Toggle(g, L.T("Powiadomienie o utworze", "Track notification"), L.T("nowy utwór pokazuje się na kilka sekund", "a new track shows up for a few seconds"),
                 c.TrackToast, v => c.TrackToast = v);
+            Toggle(g, L.T("Otwieraj tylko kliknięciem", "Open only on click"),
+                L.T("najechanie myszką nie rozwija wyspy – trzeba w nią kliknąć", "hovering doesn't expand the island – you have to click it"),
+                c.ClickToOpen, v => c.ClickToOpen = v);
             Toggle(g, L.T("Otwieraj kliknięciem na stałe", "Click to keep open"),
                 L.T("po kliknięciu odtwarzacz zostaje otwarty, aż klikniesz gdzie indziej", "after a click the player stays open until you click elsewhere"),
                 c.ClickToPin, v => c.ClickToPin = v);

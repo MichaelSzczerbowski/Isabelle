@@ -53,6 +53,8 @@ namespace IslandPlayer
         public string MonitorName { get; set; }
         /// <summary>Kliknięcie otwiera odtwarzacz na stałe - zamyka go dopiero kliknięcie gdzie indziej.</summary>
         public bool ClickToPin { get; set; }
+        /// <summary>Najechanie myszką nie otwiera odtwarzacza - tylko kliknięcie.</summary>
+        public bool ClickToOpen { get; set; }
         /// <summary>Szybkie przesunięcie wyspy w bok (myszą albo dwoma palcami na touchpadzie) zmienia utwór.</summary>
         public bool Gestures { get; set; } = true;
         // ---- personalizacja ----
