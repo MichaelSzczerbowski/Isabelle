@@ -160,83 +160,70 @@ namespace IslandPlayer
         private bool Startup => DateTime.UtcNow < _startupUntil;
 
         /// <summary>
-        /// "Isabelle" pisane jak "hello" w iPhonie: kontur każdej litery jest rysowany po kolei, od lewej do prawej,
-        /// stałą prędkością "pióra", a na końcu napis wypełnia się bielą.
+        /// "isabelle" pisane jak "hello" w iPhonie: jedna ciągła linia rysowana piórem od lewej do prawej,
+        /// a na końcu pojawia się kropka nad „i”.
         /// </summary>
+        private const string HandwritingPath = "M 20 66 C 26 64, 30 56, 32 48 C 31 58, 30 66, 34 70 C 38 72, 44 64, 48 56 C 50 52, 52 48, 54 47 C 58 52, 60 60, 56 67 C 53 72, 46 70, 47 66 C 52 70, 62 68, 68 60 C 72 52, 80 46, 86 50 C 78 46, 68 56, 72 65 C 76 72, 86 64, 90 50 C 88 60, 88 68, 93 70 C 98 71, 102 64, 105 58 C 110 44, 116 22, 110 16 C 104 12, 100 26, 102 40 C 103 52, 104 62, 106 70 C 108 60, 116 50, 124 56 C 129 62, 122 72, 112 68 C 118 69, 126 64, 132 58 C 140 56, 146 49, 141 46 C 134 45, 128 58, 133 66 C 137 72, 147 68, 154 60 C 160 48, 166 26, 160 18 C 155 13, 150 26, 152 40 C 153 54, 154 64, 159 69 C 163 71, 168 64, 172 58 C 178 48, 184 26, 178 18 C 173 13, 168 26, 170 40 C 171 54, 172 64, 177 69 C 181 71, 186 64, 190 58 C 198 56, 204 49, 199 46 C 192 45, 186 58, 191 66 C 195 72, 205 70, 214 60";
+
         private void AnimateHandwriting()
         {
             try
             {
                 StartupText.Children.Clear();
-                var face = new Typeface(new FontFamily("Segoe Script"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
-                var ft = new FormattedText("Isabelle", System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                    face, 20, Brushes.White, VisualTreeHelper.GetDpi(this).PixelsPerDip);
-                Geometry text = ft.BuildGeometry(new Point(0, 0));
-                PathGeometry flat = text.GetFlattenedPathGeometry(0.15, ToleranceType.Absolute);
-                Rect bounds = flat.Bounds;
-                if (bounds.IsEmpty) return;
-                var move = new TranslateTransform(-bounds.Left + 2, -bounds.Top + 2);
-                StartupText.Width = bounds.Width + 4;
-                StartupText.Height = bounds.Height + 4;
-
-                // kontury liter (każda figura osobno) posortowane od lewej
-                var figures = new List<(PathFigure fig, double len, double left)>();
+                const double scale = 0.5, thick = 1.7;
+                var geo = PathGeometry.CreateFromGeometry(Geometry.Parse(HandwritingPath));
+                var flat = geo.GetFlattenedPathGeometry(0.1, ToleranceType.Absolute);
+                Rect b = flat.Bounds;
+                if (b.IsEmpty) return;
+                double len = 0;
                 foreach (var f in flat.Figures)
                 {
-                    double len = 0, left = f.StartPoint.X;
                     Point prev = f.StartPoint;
                     foreach (var seg in f.Segments)
                     {
                         IEnumerable<Point> pts = seg is PolyLineSegment pl ? pl.Points
                                                : seg is LineSegment ls ? new[] { ls.Point }
                                                : (IEnumerable<Point>)Array.Empty<Point>();
-                        foreach (var p in pts)
-                        {
-                            len += (p - prev).Length;
-                            left = Math.Min(left, p.X);
-                            prev = p;
-                        }
+                        foreach (var p in pts) { len += (p - prev).Length; prev = p; }
                     }
-                    if (f.IsClosed) len += (f.StartPoint - prev).Length;
-                    if (len > 0.5) figures.Add((f, len, left));
                 }
-                figures.Sort((x, y) => x.left.CompareTo(y.left));
-                double total = 0;
-                foreach (var f in figures) total += f.len;
-                if (total <= 0) return;
+                if (len <= 0) return;
+
+                double pad = thick;
+                var tf = new TransformGroup();
+                tf.Children.Add(new TranslateTransform(-b.Left, -b.Top));
+                tf.Children.Add(new ScaleTransform(scale, scale));
+                tf.Children.Add(new TranslateTransform(pad, pad));
+                geo.Transform = tf;
+                StartupText.Width = b.Width * scale + pad * 2;
+                StartupText.Height = b.Height * scale + pad * 2 + 2;
 
                 var begin = TimeSpan.FromSeconds(0.4);     // najpierw wyspa wyskakuje
-                double writeSec = 1.45;                    // czas pisania całego napisu
-                const double thick = 1.1;
-                double elapsed = 0;
-                foreach (var f in figures)
+                double writeSec = 1.6;                     // czas pisania całego napisu
+                double dashLen = len * scale / thick + 2;  // długość kreski w jednostkach grubości linii
+                var stroke = new System.Windows.Shapes.Path
                 {
-                    var geo = new PathGeometry(new[] { f.fig.Clone() }) { Transform = move };
-                    double dashLen = f.len / thick + 2;    // długość kreski w jednostkach grubości linii
-                    var stroke = new System.Windows.Shapes.Path
-                    {
-                        Data = geo, Stroke = Brushes.White, StrokeThickness = thick,
-                        StrokeLineJoin = PenLineJoin.Round, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
-                        StrokeDashArray = new DoubleCollection { dashLen, dashLen }, StrokeDashOffset = dashLen,
-                    };
-                    double dur = writeSec * f.len / total;
-                    stroke.BeginAnimation(System.Windows.Shapes.Shape.StrokeDashOffsetProperty,
-                        new DoubleAnimation(dashLen, 0, TimeSpan.FromSeconds(dur)) { BeginTime = begin + TimeSpan.FromSeconds(elapsed) });
-                    StartupText.Children.Add(stroke);
-                    elapsed += dur;
-                }
-
-                // na koniec napis wypełnia się (z zachowaniem dziurek w literach)
-                var fill = new System.Windows.Shapes.Path
-                {
-                    Data = new GeometryGroup { Children = { text }, Transform = move, FillRule = FillRule.Nonzero },
-                    Fill = Brushes.White, Opacity = 0,
+                    Data = geo, Stroke = Brushes.White, StrokeThickness = thick,
+                    StrokeLineJoin = PenLineJoin.Round, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
+                    StrokeDashArray = new DoubleCollection { dashLen, dashLen }, StrokeDashOffset = dashLen,
                 };
-                StartupText.Children.Add(fill);
-                fill.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromSeconds(0.35))
+                stroke.BeginAnimation(System.Windows.Shapes.Shape.StrokeDashOffsetProperty,
+                    new DoubleAnimation(dashLen, 0, TimeSpan.FromSeconds(writeSec))
+                    {
+                        BeginTime = begin,
+                        EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
+                    });
+                StartupText.Children.Add(stroke);
+
+                // kropka nad „i” na sam koniec
+                double r = thick * 0.8;
+                var dot = new System.Windows.Shapes.Ellipse { Width = r * 2, Height = r * 2, Fill = Brushes.White, Opacity = 0 };
+                Canvas.SetLeft(dot, (33 - b.Left) * scale + pad - r);
+                Canvas.SetTop(dot, (37 - b.Top) * scale + pad - r);
+                StartupText.Children.Add(dot);
+                dot.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromSeconds(0.2))
                 {
-                    BeginTime = begin + TimeSpan.FromSeconds(writeSec - 0.1),
-                    EasingFunction = new SineEase { EasingMode = EasingMode.EaseOut },
+                    BeginTime = begin + TimeSpan.FromSeconds(writeSec + 0.05),
                 });
             }
             catch (Exception ex)
