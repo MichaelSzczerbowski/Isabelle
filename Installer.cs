@@ -34,6 +34,18 @@ namespace IslandPlayer
         private static void Kill(string name)
         {
             int self = Environment.ProcessId;
+            // najpierw grzecznie (program sam usunie ikonkę z zasobnika), dopiero potem siłą
+            if (name == "Isabelle" && App.SignalQuit())
+            {
+                for (int i = 0; i < 30; i++)
+                {
+                    var left = Process.GetProcessesByName(name);
+                    bool others = Array.Exists(left, p => p.Id != self);
+                    foreach (var p in left) p.Dispose();
+                    if (!others) return;
+                    Thread.Sleep(100);
+                }
+            }
             foreach (var p in Process.GetProcessesByName(name))
             {
                 try

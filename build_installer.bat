@@ -19,6 +19,10 @@ if not exist "keys\private.xml" (
 )
 
 echo [1/2] Tworze Isabelle-Setup.exe...
+rem najpierw grzecznie zamykamy Isabelle (bez martwych ikonek w zasobniku), potem ewentualnie sila
+if exist "bin\Release\net8.0-windows10.0.19041.0\Isabelle.exe" start "" "bin\Release\net8.0-windows10.0.19041.0\Isabelle.exe" --quit
+if exist "%LOCALAPPDATA%\Programs\Isabelle\Isabelle.exe" start "" "%LOCALAPPDATA%\Programs\Isabelle\Isabelle.exe" --quit
+timeout /t 2 /nobreak >nul
 taskkill /im Isabelle.exe /f >nul 2>nul
 dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o publish > installer_log.txt 2>&1
 if errorlevel 1 goto :fail

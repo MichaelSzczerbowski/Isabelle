@@ -18,6 +18,10 @@ pause
 exit /b
 
 :build
+rem najpierw grzecznie zamykamy Isabelle (bez martwych ikonek w zasobniku), potem ewentualnie sila
+if exist "bin\Release\net8.0-windows10.0.19041.0\Isabelle.exe" start "" "bin\Release\net8.0-windows10.0.19041.0\Isabelle.exe" --quit
+if exist "%LOCALAPPDATA%\Programs\Isabelle\Isabelle.exe" start "" "%LOCALAPPDATA%\Programs\Isabelle\Isabelle.exe" --quit
+timeout /t 2 /nobreak >nul
 taskkill /im Isabelle.exe /f >nul 2>nul
 echo Buduje Isabelle...
 dotnet build -c Release > build_log.txt 2>&1

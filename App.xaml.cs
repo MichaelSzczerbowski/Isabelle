@@ -22,6 +22,13 @@ namespace IslandPlayer
             var args = e.Args ?? new string[0];
             bool Has(string a) => Array.Exists(args, x => string.Equals(x, a, StringComparison.OrdinalIgnoreCase));
             string exeName = System.IO.Path.GetFileNameWithoutExtension(Environment.ProcessPath ?? "");
+            // „Isabelle.exe --quit” - grzecznie zamyka działającą kopię (z usunięciem ikonki z zasobnika)
+            if (Has("--quit"))
+            {
+                SignalQuit();
+                Shutdown();
+                return;
+            }
             if (Has("--uninstall"))
             {
                 Config = Settings.Load();
@@ -61,6 +68,7 @@ namespace IslandPlayer
                 Shutdown();
                 return;
             }
+            StartQuitListener();
 
             DispatcherUnhandledException += (s, ex) =>
             {
@@ -133,6 +141,38 @@ namespace IslandPlayer
                     app._settingsWindow.Top = top;
                 }
             }));
+        }
+
+        private const string QuitEventName = "Isabelle_Quit_7F3A9C";
+
+        /// <summary>Prosi działającą kopię Isabelle o zamknięcie. False = żadna nie działa.</summary>
+        public static bool SignalQuit()
+        {
+            try
+            {
+                using var ev = EventWaitHandle.OpenExisting(QuitEventName);
+                ev.Set();
+                return true;
+            }
+            catch { return false; }
+        }
+
+        /// <summary>
+        /// Czeka na prośbę o zamknięcie (od budowania, aktualizacji, instalatora). Dzięki temu program zamyka się
+        /// normalnie i usuwa swoją ikonkę z zasobnika - przy „zabiciu” procesu zostawała tam martwa ikonka.
+        /// </summary>
+        private void StartQuitListener()
+        {
+            try
+            {
+                var ev = new EventWaitHandle(false, EventResetMode.AutoReset, QuitEventName);
+                new Thread(() =>
+                {
+                    ev.WaitOne();
+                    Dispatcher.BeginInvoke(new Action(Quit));
+                }) { IsBackground = true, Name = "quit-listener" }.Start();
+            }
+            catch (Exception ex) { Log.Error(ex); }
         }
 
         public static void Quit()
