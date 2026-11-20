@@ -98,7 +98,7 @@ namespace IslandPlayer
                 g.Children.Add(sc);
                 g.Children.Add(rot);
                 img.RenderTransform = g;
-                img.Effect = new BlurEffect { Radius = 110, RenderingBias = RenderingBias.Performance, KernelType = KernelType.Gaussian };
+                RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.Linear);
                 bgHost.Children.Add(img);
             }
             root.Children.Add(new Rectangle { Fill = new SolidColorBrush(Color.FromArgb(120, 0, 0, 0)) });
@@ -291,7 +291,7 @@ namespace IslandPlayer
             {
                 _shownCover = cover;
                 _artBrush.ImageSource = cover;
-                _bg1.Source = _bg2.Source = cover;
+                _bg1.Source = _bg2.Source = cover != null ? PreBlur(cover) : null;
                 _art.Background = cover != null ? _artBrush : (Brush)new SolidColorBrush(Color.FromRgb(42, 42, 48));
             }
             var lyrics = _island.Lyrics;
@@ -312,11 +312,12 @@ namespace IslandPlayer
             if (_playIcon.Tag as string != geo) { _playIcon.Tag = geo; _playIcon.Data = Geometry.Parse(geo); }
 
             // tło krąży wolniej podczas pauzy
-            _phase += dt * (playing ? 1 : 0.25);
-            _rot1.Angle = _phase * 4;
-            _rot2.Angle = -_phase * 3 + 40;
-            _sc1.ScaleX = _sc1.ScaleY = 1.5 + Math.Sin(_phase * 0.35) * 0.12;
-            _sc2.ScaleX = _sc2.ScaleY = 1.9 + Math.Cos(_phase * 0.27) * 0.15;
+            // skala zawsze > 1, a obraz większy niż przekątna ekranu - rogi nigdy nie wychodzą
+            _phase += dt * (playing ? 1 : 0.3);
+            _rot1.Angle = _phase * 14;
+            _rot2.Angle = -_phase * 10 + 40;
+            _sc1.ScaleX = _sc1.ScaleY = 1.45 + Math.Sin(_phase * 0.9) * 0.15;
+            _sc2.ScaleX = _sc2.ScaleY = 1.85 + Math.Cos(_phase * 0.7) * 0.2;
 
             UpdateLyrics(pos, dt);
 
@@ -327,8 +328,30 @@ namespace IslandPlayer
             Cursor = idle ? Cursors.None : null;
         }
 
+        /// <summary>
+        /// Rozmycie liczone raz na małej okładce (zamiast na żywo na całym ekranie) - tło jest płynne i nie obciąża karty.
+        /// </summary>
+        private static BitmapSource PreBlur(BitmapSource cover)
+        {
+            const int size = 256;
+            var canvas = new Canvas { Width = size, Height = size, ClipToBounds = true };
+            // okładka trochę większa od płótna, żeby rozmyte brzegi nie były przezroczyste
+            var img = new Image { Source = cover, Stretch = Stretch.UniformToFill, Width = size * 1.4, Height = size * 1.4,
+                                  Effect = new BlurEffect { Radius = 26, KernelType = KernelType.Gaussian, RenderingBias = RenderingBias.Quality } };
+            Canvas.SetLeft(img, -size * 0.2);
+            Canvas.SetTop(img, -size * 0.2);
+            canvas.Children.Add(img);
+            canvas.Measure(new Size(size, size));
+            canvas.Arrange(new Rect(0, 0, size, size));
+            var rtb = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
+            rtb.Render(canvas);
+            rtb.Freeze();
+            return rtb;
+        }
+
         private void BuildLyrics(IReadOnlyList<LyricLine> lyrics)
         {
+            _lyricIdx = -2;
             _lyricsStack.Children.Clear();
             _lines.Clear();
             _shift = 0;
@@ -360,14 +383,16 @@ namespace IslandPlayer
                 if (_shownLyrics[i].Time <= pos + 0.25) idx = i;
                 else break;
             }
-            if (idx != _lyricIdx)
+            _lyricIdx = idx;
+            // jasność liczona co klatkę - bieżąca linijka zawsze świeci, nawet po przebudowie listy albo przewinięciu
+            double k = Math.Min(1, dt * 9);
+            for (int i = 0; i < _lines.Count; i++)
             {
-                _lyricIdx = idx;
-                for (int i = 0; i < _lines.Count; i++)
-                {
-                    double op = i == idx ? 1 : Math.Abs(i - idx) == 1 ? 0.45 : 0.28;
-                    _lines[i].BeginAnimation(OpacityProperty, new DoubleAnimation(op, TimeSpan.FromSeconds(0.35)));
-                }
+                double op = i == idx ? 1 : Math.Abs(i - idx) == 1 ? 0.45 : 0.28;
+                var tb = _lines[i];
+                double cur = tb.Opacity;
+                if (Math.Abs(cur - op) > 0.004) tb.Opacity = cur + (op - cur) * k;
+                else if (cur != op) tb.Opacity = op;
             }
             if (DateTime.UtcNow < _manualUntil)
             {
