@@ -58,7 +58,7 @@ namespace IslandPlayer
         private bool _tlPlaying;
 
         // okładki: kilka prób, odrzucanie okładki poprzedniego utworu
-        private sealed class CoverState { public DateTime Start; public int Tries; public ulong? Crc; public int Same; public bool Got; public bool OnlineTried; public volatile bool OnlineDone; }
+        private sealed class CoverState { public DateTime Start; public int Tries; public ulong? Crc; public int Same; public bool Got; }
         private readonly Dictionary<string, CoverState> _covers = new Dictionary<string, CoverState>();
         private static readonly double[] CoverSchedule = { 0, 0.8, 2, 4, 7, 11, 16 };
         private ulong? _curCrc, _prevCrc;
@@ -239,35 +239,6 @@ namespace IslandPlayer
             }
             if (st.Same >= 1 || st.Tries >= CoverSchedule.Length) return;
 
-            // Spotify dokleja do okładki pasek z logo - najpierw szukamy czystej okładki w internecie
-            // (w tle, żeby nie blokować odświeżania paska postępu; miniaturę od Spotify bierzemy dopiero, gdy się nie uda)
-            bool spotify = (appId ?? "").IndexOf("spotify", StringComparison.OrdinalIgnoreCase) >= 0;
-            if (spotify && !st.OnlineTried)
-            {
-                st.OnlineTried = true;
-                string t = props.Title ?? "", a = props.Artist ?? "";
-                var state = st;
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        var online = await CoverService.FindAsync(t, a);
-                        if (online != null)
-                        {
-                            state.Got = true;
-                            state.Same = 99; // mamy czystą okładkę - miniatura od Spotify nie jest już potrzebna
-                            CoverReady?.Invoke(key, online.Value.bmp, online.Value.accent);
-                        }
-                    }
-                    catch (Exception ex) { Log.Error(ex); }
-                    finally
-                    {
-                        state.OnlineDone = true;
-                        Poke();
-                    }
-                });
-            }
-            if (spotify && !st.OnlineDone) return;
             if (st.Same >= 1) return;
 
             if ((now - st.Start).TotalSeconds < CoverSchedule[st.Tries]) return;
@@ -294,7 +265,6 @@ namespace IslandPlayer
             _curCrcKey = key;
 
             var (bmp, accent) = ImageUtil.ProcessCover(data, appId);
-            if (st.Same >= 99) return; // w międzyczasie przyszła czysta okładka z internetu
             if (bmp != null)
             {
                 st.Got = true;

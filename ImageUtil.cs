@@ -37,7 +37,11 @@ namespace IslandPlayer
 
                 Int32Rect crop = new Int32Rect(0, 0, w, h);
                 if ((appId ?? "").IndexOf("spotify", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
                     crop = SpotifyCrop(px, w, h);
+                    // ostatnia miniatura od Spotify - do sprawdzenia, gdyby wycinanie znów się pomyliło
+                    try { File.WriteAllBytes(Path.Combine(Settings.Folder, "ostatnia_okladka_spotify.jpg"), data); } catch { }
+                }
 
                 int sq = Math.Min(crop.Width, crop.Height);
                 crop = new Int32Rect(crop.X + (crop.Width - sq) / 2, crop.Y + (crop.Height - sq) / 2, sq, sq);
@@ -58,44 +62,60 @@ namespace IslandPlayer
         }
 
         /// <summary>Spotify dokleja tło i pasek z logo - szukamy granic samej okładki.</summary>
+        /// <summary>
+        /// Spotify dokleja pod okładką pasek z logo (i czasem ramkę). Szukamy:
+        /// 1) paska na dole - wiersze w większości w kolorze tła paska (logo zajmuje tylko część szerokości),
+        /// 2) ramki po bokach i u góry nad samą okładką.
+        /// </summary>
         private static Int32Rect SpotifyCrop(byte[] px, int w, int h)
         {
             int Idx(int x, int y) => (y * w + x) * 4;
-            int bi = Idx(1, h - 2);
-            byte bb = px[bi], bg = px[bi + 1], br = px[bi + 2];
-            bool Differs(int x, int y)
+            bool Near(int x, int y, int i0, int tol)
             {
                 int i = Idx(x, y);
-                return Math.Max(Math.Abs(px[i] - bb), Math.Max(Math.Abs(px[i + 1] - bg), Math.Abs(px[i + 2] - br))) > 28;
+                return Math.Abs(px[i] - px[i0]) <= tol && Math.Abs(px[i + 1] - px[i0 + 1]) <= tol && Math.Abs(px[i + 2] - px[i0 + 2]) <= tol;
             }
-            int scanH = (int)(h * 0.7);
-            int step = Math.Max(1, w / 150);
-            bool ColHas(int x)
+
+            // ---- 1) pasek z logo na dole ----
+            int band0 = Idx(2, h - 2);                 // kolor tła paska (lewy dolny róg - poza logo)
+            int bandTop = h;
+            int minCover = (int)(h * 0.55);            // pasek nie może być wyższy niż ~45% obrazka
+            for (int y = h - 1; y >= minCover; y--)
             {
-                for (int y = 0; y < scanH; y += step) if (Differs(x, y)) return true;
-                return false;
+                int same = 0, n = 0;
+                for (int x = 0; x < w; x += 2) { n++; if (Near(x, y, band0, 22)) same++; }
+                if (same >= n * 0.4) bandTop = y;      // wiersz paska (nawet z kawałkiem logo)
+                else break;                            // zaczęła się okładka
             }
-            int left = 0;
-            for (int x = 0; x < w / 2; x++) if (ColHas(x)) { left = x; break; }
-            int right = w;
-            for (int x = w - 1; x > w / 2; x--) if (ColHas(x)) { right = x + 1; break; }
-            int aw = right - left;
-            int top = 0;
-            for (int y = 0; y < h / 2; y++)
+            if (h - bandTop < h * 0.04) bandTop = h;   // brak paska (np. zwykła okładka)
+
+            // ---- 2) ramka wokół okładki (kolor z lewego górnego rogu) ----
+            int frame0 = Idx(1, 1);
+            int coverBottom = bandTop;
+            bool ColIsFrame(int x)
             {
-                bool any = false;
-                for (int x = left; x < right; x += step) if (Differs(x, y)) { any = true; break; }
-                if (any) { top = y; break; }
+                for (int y = 0; y < coverBottom; y += 2) if (!Near(x, y, frame0, 20)) return false;
+                return true;
             }
-            bool plausible = aw >= w * 0.55 && aw <= w * 0.95 && top + aw <= h && Math.Abs(left - (w - right)) <= w * 0.06;
+            bool RowIsFrame(int y, int l, int r)
+            {
+                for (int x = l; x < r; x += 2) if (!Near(x, y, frame0, 20)) return false;
+                return true;
+            }
+            int left = 0, right = w, top = 0;
+            while (left < w / 3 && ColIsFrame(left)) left++;
+            while (right > w * 2 / 3 && ColIsFrame(right - 1)) right--;
+            while (top < coverBottom / 3 && RowIsFrame(top, left, right)) top++;
+
+            int cw = right - left, ch = coverBottom - top;
+            bool plausible = cw >= w * 0.45 && ch >= h * 0.45;
             if (!plausible)
             {
-                // nie udało się znaleźć brzegów: bierzemy kwadrat z góry, na tyle mały, żeby ominąć pasek z logo na dole
-                aw = (int)(Math.Min(w, h) * 0.74);
-                left = (w - aw) / 2;
-                top = 0;
+                // nie udało się rozpoznać układu: kwadrat z góry, omijający dół z logo
+                int aw = (int)(Math.Min(w, h) * 0.74);
+                return new Int32Rect((w - aw) / 2, 0, aw, aw);
             }
-            return new Int32Rect(left, top, Math.Min(aw, w - left), Math.Min(aw, h - top));
+            return new Int32Rect(left, top, cw, ch);
         }
 
         /// <summary>Najbardziej "soczysty" kolor okładki (jak akcent w iOS).</summary>
