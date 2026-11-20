@@ -23,6 +23,11 @@ A tiny black pill at the top of your screen that shows what's playing and grows 
 | 🌙 | Smooth fade on pause / resume | Płynne ściszanie przy pauzie |
 | ⌨️ | Global hotkeys: `Ctrl+Alt+P`, `Ctrl+Alt+→`, `Ctrl+Alt+←` | Skróty klawiszowe |
 | 📍 | Drag the island to any screen edge (top, bottom, left, right) | Przeciągnij wyspę na dowolną krawędź ekranu |
+| 📺 | **OBS overlay** for streamers – cover, title and live lyrics on your stream | Nakładka OBS dla streamerów |
+| 💬 | **Discord status** with the line being sung, live | Status na Discordzie z tekstem piosenki na żywo |
+| 🎙️ | Lowers or pauses music during calls (mic in use) | Ścisza muzykę podczas rozmów |
+| 🖼️ | Album-cover wallpaper while listening | Tapeta z okładki podczas słuchania |
+| ✨ | Glowing screen edges pulsing with the music | Świecące krawędzie ekranu w rytm muzyki |
 | 🎮 | Hides automatically in fullscreen games and videos | Chowa się w grach i filmach na pełnym ekranie |
 | 🔀 | Switch between multiple players | Przełączanie między odtwarzaczami |
 | 🌍 | English and Polish (follows your Windows language) | Polski i angielski (wg języka Windows) |

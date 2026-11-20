@@ -70,6 +70,7 @@ namespace IslandPlayer
                 ("Wygląd", "Appearance", IconSparkle, PageLook),
                 ("Personalizacja", "Customize", IconPalette, PageCustomize),
                 ("Dźwięk", "Sound", IconSound, PageSound),
+                ("Dodatki", "Extras", IconBolt, PageExtras),
                 ("System", "System", IconSliders, PageSystem),
                 ("Aktualizacje", "Updates", IconUpdate, PageUpdates),
             };
@@ -432,6 +433,87 @@ namespace IslandPlayer
             Paint();
             sp.Children.Add(row);
             AddRow(rows, sp);
+        }
+
+        private StackPanel PageExtras()
+        {
+            var c = App.Config;
+            var p = new StackPanel();
+
+            // ---- nakładka OBS ----
+            var g = Group(p, L.T("STREAM (OBS)", "STREAM (OBS)"));
+            Toggle(g, L.T("Nakładka dla streamerów", "Streamer overlay"),
+                L.T("wyspa z okładką i tekstem piosenki na Twoim streamie", "the island with cover and lyrics on your stream"),
+                c.OverlayEnabled, v => c.OverlayEnabled = v);
+            var link = new Grid { Margin = new Thickness(18, 4, 16, 14) };
+            var linkText = new StackPanel();
+            string status = App.Island?.OverlayStatus;
+            linkText.Children.Add(new TextBlock
+            {
+                Text = c.OverlayEnabled && status != null && status.StartsWith("http") ? status : "http://localhost:" + c.OverlayPort + "/",
+                FontSize = 13, FontFamily = new FontFamily("Cascadia Mono, Consolas"), Foreground = _accentBrush,
+            });
+            linkText.Children.Add(new TextBlock
+            {
+                Text = L.T("OBS → Źródła → + → Przeglądarka → wklej link, szerokość 640, wysokość 160. Opcje: ?lyrics=0  ?scale=1.5  ?style=glass",
+                           "OBS → Sources → + → Browser → paste the link, width 640, height 160. Options: ?lyrics=0  ?scale=1.5  ?style=glass"),
+                FontSize = 11.5, Foreground = TextSub, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 110, 0),
+            });
+            if (c.OverlayEnabled && status != null && !status.StartsWith("http"))
+                linkText.Children.Add(new TextBlock { Text = L.T("Nie udało się uruchomić: ", "Couldn't start: ") + status, FontSize = 11.5, Foreground = Hex("#FF6B61"), TextWrapping = TextWrapping.Wrap });
+            link.Children.Add(linkText);
+            var copy = PillButton(L.T("Kopiuj", "Copy"), true);
+            copy.Padding = new Thickness(16, 6, 16, 7);
+            copy.HorizontalAlignment = HorizontalAlignment.Right;
+            copy.VerticalAlignment = VerticalAlignment.Top;
+            copy.MouseLeftButtonUp += (s, e) =>
+            {
+                try { Clipboard.SetText("http://localhost:" + c.OverlayPort + "/"); ((TextBlock)copy.Child).Text = L.T("Skopiowano ✓", "Copied ✓"); }
+                catch { }
+            };
+            link.Children.Add(copy);
+            g.Children.Add(link);
+
+            // ---- Discord ----
+            var d = Group(p, "DISCORD");
+            if (DiscordPresence.Configured)
+            {
+                Toggle(d, L.T("Status na Discordzie", "Discord status"), L.T("„Słucha…” z okładką i czasem utworu", "“Listening to…” with time left"),
+                    c.DiscordEnabled, v => c.DiscordEnabled = v);
+                Toggle(d, L.T("Tekst piosenki w statusie", "Lyrics in status"), L.T("aktualnie śpiewana linijka, zmienia się na żywo", "the line being sung, updated live"),
+                    c.DiscordLyrics, v => c.DiscordLyrics = v);
+            }
+            else
+            {
+                var info = new StackPanel { Margin = new Thickness(18, 12, 16, 12) };
+                info.Children.Add(new TextBlock { Text = L.T("Status na Discordzie", "Discord status"), FontSize = 14, FontWeight = FontWeights.SemiBold });
+                info.Children.Add(new TextBlock { Text = L.T("wkrótce – czeka na konfigurację przez autora", "coming soon – waiting for setup by the author"), FontSize = 12, Foreground = TextSub });
+                AddRow(d, info);
+            }
+
+            // ---- rozmowy ----
+            var m = Group(p, L.T("ROZMOWY", "CALLS"));
+            Toggle(m, L.T("Ściszaj muzykę podczas rozmowy", "Lower music during calls"),
+                L.T("gdy program używa mikrofonu: Discord, Teams, gra…", "when an app uses the microphone: Discord, Teams, games…"),
+                c.MicDuck, v => c.MicDuck = v);
+            Segment(m, L.T("Co zrobić z muzyką", "What to do with music"), null,
+                new[] { ("duck", L.T("Ściszyć", "Lower")), ("pause", L.T("Zatrzymać", "Pause")) },
+                c.MicMode, v => c.MicMode = v);
+
+            // ---- tapeta ----
+            var w = Group(p, L.T("PULPIT", "DESKTOP"));
+            Toggle(w, L.T("Tapeta z okładki", "Album wallpaper"),
+                L.T("podczas słuchania tapeta to rozmyta okładka; po minucie ciszy wraca Twoja tapeta", "while listening the wallpaper is the blurred cover; your wallpaper comes back after a minute of silence"),
+                c.AlbumWallpaper, v => c.AlbumWallpaper = v);
+
+            // ---- krawędzie ----
+            Segment(w, L.T("Świecące krawędzie ekranu", "Glowing screen edges"), L.T("poświata w kolorze okładki pulsująca z muzyką", "a glow in the cover's color that pulses with the music"),
+                new[] { ("off", L.T("Wył.", "Off")), ("fullscreen", L.T("Pełny ekran", "Fullscreen")), ("always", L.T("Zawsze", "Always")) },
+                c.EdgeGlow, v => c.EdgeGlow = v);
+            Segment(w, L.T("Siła poświaty", "Glow strength"), null,
+                new[] { ("low", L.T("Słaba", "Low")), ("mid", L.T("Średnia", "Medium")), ("high", L.T("Mocna", "High")) },
+                c.EdgeIntensity, v => c.EdgeIntensity = v);
+            return p;
         }
 
         private StackPanel PageSound()
@@ -960,6 +1042,7 @@ namespace IslandPlayer
         private const string IconUpdate = "M7,0 H9 V8 L12,5 L13.4,6.4 L8,11.8 L2.6,6.4 L4,5 L7,8 Z M0,13 H16 V15 H0 Z";
         private const string IconMove = "M8,0 L11,3 H9 V7 H13 V5 L16,8 L13,11 V9 H9 V13 H11 L8,16 L5,13 H7 V9 H3 V11 L0,8 L3,5 V7 H7 V3 H5 Z";
         private const string IconPalette = "M5,0 A5,5 0 1 1 5,10 A5,5 0 1 1 5,0 Z M12,5 A4,4 0 1 1 12,13 A4,4 0 1 1 12,5 Z M4,11 A3.5,3.5 0 1 1 4,18 A3.5,3.5 0 1 1 4,11 Z";
+        private const string IconBolt = "M9,0 L2,9 H7 L5,16 L13,6 H8 Z";
         private const string IconClose = "M0,0 L10,10 M10,0 L0,10";
 
         /// <summary>Przełącznik jak w iOS, w kolorze okładki.</summary>

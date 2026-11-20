@@ -89,6 +89,12 @@ namespace IslandPlayer
             _expandTimer.Tick += (s, e) => { _expandTimer.Stop(); _expanded = true; EnsureLoop(); };
             _collapseTimer.Tick += (s, e) => { _collapseTimer.Stop(); if (!_hover && !_dragging) { _expanded = false; EnsureLoop(); } };
             _slowTimer.Tick += (s, e) => SlowTick();
+            _wallTimer.Tick += (s, e) =>
+            {
+                _wallTimer.Stop();
+                if (App.Config.AlbumWallpaper && _cover != null && _snap != null && IsPlaying)
+                    WallpaperService.Apply(_cover, _snap.Title, _snap.Artist);
+            };
 
             Pill.MouseEnter += (s, e) => { _hover = true; _collapseTimer.Stop(); if (!_expanded && !_moving && !App.Config.DotMode) _expandTimer.Start(); };
             Pill.MouseLeave += (s, e) =>
@@ -201,6 +207,7 @@ namespace IslandPlayer
             // tytuł w małej wyspie: szersza pigułka, napis na środku
             CompactView.Width = c.CompactTitle ? 280 : 180;
             CompactTitleClip.Visibility = c.CompactTitle ? Visibility.Visible : Visibility.Collapsed;
+            ApplyExtras();
             EnsureLoop();
         }
 
@@ -264,6 +271,11 @@ namespace IslandPlayer
                     foreach (var a in Hotkey.Actions) Native.UnregisterHotKey(_hwnd, a.id);
                 }
                 Native.SetVolumeOsdVisible(true);
+                _overlay.Stop();
+                _discord.Dispose();
+                _edges?.Close();
+                if (App.Config.WallpaperActive) WallpaperService.Restore(wait: true);
+                if (_ducked && _audio != null) _audio.Volume = _duckSaved;
                 _audio?.Dispose();
             }
             catch (Exception ex)
@@ -351,6 +363,7 @@ namespace IslandPlayer
         {
             _cover = bmp;
             _coverKey = key;
+            if (App.Config.AlbumWallpaper) { _wallTimer.Stop(); _wallTimer.Start(); }
             ArtBrush.ImageSource = bmp;
             CompactArtBrush.ImageSource = bmp;
             ToastArtBrush.ImageSource = bmp;
@@ -851,6 +864,16 @@ namespace IslandPlayer
 
             if (CompactView.Opacity > 0) CompactBars.Update(t, playing, _peakS, _peakMax);
             if (CompactVView.Opacity > 0) CompactVBars.Update(t, playing, _peakS, _peakMax);
+            if (_edges != null)
+            {
+                // świecące krawędzie: zawsze albo tylko przy pełnym ekranie, jasność z poziomu muzyki
+                var cfgE = App.Config;
+                bool edgeOn = has && playing && (cfgE.EdgeGlow == "always" || (cfgE.EdgeGlow == "fullscreen" && _fgFullscreen));
+                double strength = cfgE.EdgeIntensity == "low" ? 0.45 : cfgE.EdgeIntensity == "high" ? 1.0 : 0.7;
+                double pulse = _peakMax > 0.02 ? Math.Min(1, _peakS / Math.Max(0.05, _peakMax * 0.8)) : 0.5;
+                _edges.SetColor(_accent);
+                _edges.Update(edgeOn ? strength * (0.3 + 0.7 * pulse) : 0, steps);
+            }
             if (DotView.Opacity > 0)
             {
                 // kropka świeci kolorem okładki i pulsuje z muzyką; szara, gdy nic nie gra
@@ -935,7 +958,8 @@ namespace IslandPlayer
                 _settledSince = 0;
             }
             _lowFps = croppable;
-            needed = needed || (croppable && _crop == null) || st || StartupView.Opacity > 0;
+            needed = needed || (croppable && _crop == null) || st || StartupView.Opacity > 0 ||
+                     (_edges != null && (_edges.Visible || (has && playing)));
 
             if (!needed) StopLoop();
         }
@@ -1273,6 +1297,156 @@ namespace IslandPlayer
             Shadow.Margin = sm;
         }
 
+        // ================= dodatki =================
+        private readonly OverlayServer _overlay = new OverlayServer();
+        private readonly DiscordPresence _discord = new DiscordPresence();
+        private EdgeGlow _edges;
+        private bool _fgFullscreen;
+        private readonly DispatcherTimer _wallTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.5) };
+        private DateTime _lastPlayingAt = DateTime.UtcNow;
+        private bool _micActive, _pausedByMic, _ducked;
+        private float _duckSaved;
+        private DateTime _micIdleSince = DateTime.MinValue;
+
+        /// <summary>Bieżąca i następna linijka tekstu piosenki (do nakładki i Discorda).</summary>
+        private (string line, string next) CurrentLyric(double pos)
+        {
+            if (_lyrics == null || _lyrics.Count == 0) return ("", "");
+            int idx = -1;
+            for (int i = 0; i < _lyrics.Count; i++)
+            {
+                if (_lyrics[i].Time <= pos + 0.25) idx = i;
+                else break;
+            }
+            string Line(int i) => i < 0 || i >= _lyrics.Count ? "" : _lyrics[i].Instrumental ? "♪" : _lyrics[i].Text;
+            return (Line(idx), Line(idx + 1));
+        }
+
+        /// <summary>Włącza / wyłącza dodatki po zmianie ustawień.</summary>
+        private void ApplyExtras()
+        {
+            var c = App.Config;
+            if (c.OverlayEnabled) _overlay.Start(c.OverlayPort);
+            else _overlay.Stop();
+            if (!c.DiscordEnabled) _discord.Clear();
+
+            if (c.EdgeGlow != "off")
+            {
+                if (_edges == null) _edges = new EdgeGlow();
+                PlaceEdges();
+                _edges.SetColor(_accent);
+            }
+            else if (_edges != null)
+            {
+                _edges.Close();
+                _edges = null;
+            }
+
+            if (!c.AlbumWallpaper && c.WallpaperActive) WallpaperService.Restore();
+            else if (c.AlbumWallpaper && _cover != null && IsPlaying) { _wallTimer.Stop(); _wallTimer.Start(); }
+
+            if (!c.MicDuck) EndMicDuck();
+        }
+
+        public string OverlayStatus => _overlay.Running ? "http://localhost:" + _overlay.Port + "/" : _overlay.Error;
+
+        private void PlaceEdges()
+        {
+            if (_edges == null || _hwnd == IntPtr.Zero) return;
+            var scr = WinForms.Screen.FromHandle(_hwnd).Bounds;
+            double d = Dpi;
+            _edges.Place(new Rect(scr.X / d, scr.Y / d, scr.Width / d, scr.Height / d));
+        }
+
+        /// <summary>Publikuje stan dla nakładki OBS i Discorda.</summary>
+        private void PublishState()
+        {
+            var s = _snap;
+            if (s == null)
+            {
+                OverlayServer.State = new NowPlayingState { Accent = Hex(_accent) };
+                return;
+            }
+            double pos = DisplayPosition();
+            var (line, next) = CurrentLyric(pos);
+            OverlayServer.State = new NowPlayingState
+            {
+                Title = s.Title,
+                Artist = s.Artist,
+                App = MediaService.PrettyAppName(s.AppId),
+                Playing = IsPlaying,
+                Position = pos,
+                Duration = s.Duration,
+                Lyric = line,
+                NextLyric = next,
+                Accent = Hex(_accent),
+                CoverKey = _cover != null ? (_coverKey ?? "") : "",
+                Cover = _cover,
+            };
+        }
+
+        private static string Hex(Color c) => "#" + c.R.ToString("X2") + c.G.ToString("X2") + c.B.ToString("X2");
+
+        /// <summary>Rozmowa przez mikrofon: ściszenie albo pauza muzyki, potem powrót.</summary>
+        private void CheckMic()
+        {
+            if (!App.Config.MicDuck || _snap == null) { EndMicDuck(); return; }
+            bool inUse = MicWatcher.InUse();
+            if (inUse)
+            {
+                _micIdleSince = DateTime.MinValue;
+                if (_micActive) return;
+                _micActive = true;
+                bool canDuck = App.Config.MicMode == "duck" && _audio != null && _audio.IsAppVolume;
+                if (canDuck)
+                {
+                    _duckSaved = _audio.Volume;
+                    _ducked = true;
+                    _ = DuckTo(_duckSaved * 0.2f);
+                }
+                else if (IsPlaying)
+                {
+                    // gdy nie da się ściszyć samej muzyki - pauza (nie ściszamy rozmówcy!)
+                    _pausedByMic = true;
+                    PlayPause();
+                }
+            }
+            else if (_micActive)
+            {
+                if (_micIdleSince == DateTime.MinValue) _micIdleSince = DateTime.UtcNow;
+                if ((DateTime.UtcNow - _micIdleSince).TotalSeconds >= 2) EndMicDuck();
+            }
+        }
+
+        private void EndMicDuck()
+        {
+            if (!_micActive) return;
+            _micActive = false;
+            _micIdleSince = DateTime.MinValue;
+            if (_ducked && _audio != null)
+            {
+                _ducked = false;
+                _ = DuckTo(_duckSaved);
+            }
+            if (_pausedByMic)
+            {
+                _pausedByMic = false;
+                if (!IsPlaying) PlayPause();
+            }
+        }
+
+        private async System.Threading.Tasks.Task DuckTo(float target)
+        {
+            if (_audio == null) return;
+            float from = _audio.Volume;
+            for (int i = 1; i <= 12; i++)
+            {
+                _audio.Volume = from + (target - from) * i / 12f;
+                await System.Threading.Tasks.Task.Delay(30);
+            }
+            _audio.Volume = target;
+        }
+
         // ================= co 250 ms =================
         private void SlowTick()
         {
@@ -1291,6 +1465,7 @@ namespace IslandPlayer
                 if (_slowTicks % 2 == 0 && _hwnd != IntPtr.Zero)
                 {
                     bool fullscreen = Native.IsForegroundFullscreen(_hwnd);
+                    _fgFullscreen = fullscreen;
                     bool fs = App.Config.HideInFullscreen && fullscreen;
                     if (fs != _fsHidden)
                     {
@@ -1308,6 +1483,19 @@ namespace IslandPlayer
                 if (_slowTicks % 12 == 0 && _hwnd != IntPtr.Zero && !_fsHidden) Native.KeepTopmost(_hwnd);
                 if (_slowTicks % 8 == 0 && App.Config.VolumeOsd) Native.SetVolumeOsdVisible(false);
                 if (_snap != null && _snap.Playing) EnsureLoop();
+
+                // ---- dodatki ----
+                var cfg = App.Config;
+                if (cfg.OverlayEnabled || cfg.DiscordEnabled) PublishState();
+                if (_slowTicks % 4 == 0)
+                {
+                    if (cfg.DiscordEnabled) _discord.Update(OverlayServer.State, cfg.DiscordLyrics);
+                    if (cfg.MicDuck || _micActive) CheckMic();
+                }
+                if (IsPlaying) _lastPlayingAt = DateTime.UtcNow;
+                // tapeta wraca po minucie ciszy
+                if (cfg.WallpaperActive && (DateTime.UtcNow - _lastPlayingAt).TotalSeconds > 60) WallpaperService.Restore();
+                if (_edges != null && _edges.Visible && _fgFullscreen && _slowTicks % 4 == 0) _edges.BringToTop();
             }
             catch (Exception ex)
             {

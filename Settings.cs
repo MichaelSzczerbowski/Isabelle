@@ -68,6 +68,24 @@ namespace IslandPlayer
         /// <summary>Wyspa "wyskakuje" z logo przy uruchomieniu.</summary>
         public bool StartupAnimation { get; set; } = true;
 
+        // ---- dodatki ----
+        public bool OverlayEnabled { get; set; }
+        public int OverlayPort { get; set; } = 4510;
+        public bool DiscordEnabled { get; set; }
+        public bool DiscordLyrics { get; set; } = true;
+        public bool MicDuck { get; set; }
+        /// <summary>duck (ścisz) / pause</summary>
+        public string MicMode { get; set; } = "duck";
+        public bool AlbumWallpaper { get; set; }
+        public bool WallpaperActive { get; set; }
+        public string OriginalWallpaper { get; set; }
+        public string OriginalWallpaperStyle { get; set; }
+        public string OriginalTileWallpaper { get; set; }
+        /// <summary>off / always / fullscreen</summary>
+        public string EdgeGlow { get; set; } = "off";
+        /// <summary>low / mid / high</summary>
+        public string EdgeIntensity { get; set; } = "mid";
+
         /// <summary>auto / pl / en</summary>
         public string Language { get; set; } = "auto";
         public bool AutoUpdate { get; set; } = true;
