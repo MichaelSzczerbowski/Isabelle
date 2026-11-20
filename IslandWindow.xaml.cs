@@ -1027,23 +1027,23 @@ namespace IslandPlayer
                 _bgMove1.X = _bgMove1.Y = 0;
                 return;
             }
-            _bgPhase += Math.Min(dt, 0.1) * (playing ? 1.0 : 0.3);
+            _bgPhase += Math.Min(dt, 0.1) * (playing ? 2.3 : 0.7); // szybszy, wyraźniejszy ruch (jak w Apple Music)
             double a = _bgPhase;
             double level = _peakMax > 0.02 ? Math.Min(1, _peakS / Math.Max(0.05, _peakMax * 0.8)) : 0;
             double beat = playing ? level * 0.05 : 0;
 
             double s1 = 2.1 + 0.12 * Math.Sin(a * 0.45) + beat * 2;
             _bgScale1.ScaleX = _bgScale1.ScaleY = s1;
-            _bgRot1.Angle = (a * 6) % 360;
-            _bgMove1.X = 60 * Math.Sin(a * 0.31);
-            _bgMove1.Y = 45 * Math.Cos(a * 0.27);
+            _bgRot1.Angle = (a * 9) % 360;
+            _bgMove1.X = 95 * Math.Sin(a * 0.31);
+            _bgMove1.Y = 70 * Math.Cos(a * 0.27);
 
             double s2 = 2.6 + 0.15 * Math.Cos(a * 0.38) + beat * 2;
             _bgScale2.ScaleX = -s2;   // lustrzane odbicie - inne plamy koloru
             _bgScale2.ScaleY = s2;
-            _bgRot2.Angle = (-a * 4.5) % 360;
-            _bgMove2.X = 70 * Math.Cos(a * 0.23);
-            _bgMove2.Y = 50 * Math.Sin(a * 0.35);
+            _bgRot2.Angle = (-a * 7) % 360;
+            _bgMove2.X = 105 * Math.Cos(a * 0.23);
+            _bgMove2.Y = 75 * Math.Sin(a * 0.35);
             BgCover2.Opacity = expOp * 0.6;
         }
 
