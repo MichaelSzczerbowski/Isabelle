@@ -172,11 +172,15 @@ namespace IslandPlayer
             // ---- tekst piosenki ----
             Grid.SetColumn(_lyricsHost, 1);
             _lyricsHost.Margin = new Thickness(80, 0, 0, 0);
-            _lyricsHost.OpacityMask = new LinearGradientBrush(new GradientStopCollection
+            // Absolute: maska liczona od wysokości panelu, a nie od całego (długiego) tekstu -
+            // inaczej pierwsze i ostatnie linijki były przezroczyste (ten sam błąd, co kiedyś w wyspie)
+            var mask = new LinearGradientBrush(new GradientStopCollection
             {
-                new GradientStop(Colors.Transparent, 0), new GradientStop(Colors.Black, 0.22),
-                new GradientStop(Colors.Black, 0.78), new GradientStop(Colors.Transparent, 1),
-            }, 90);
+                new GradientStop(Colors.Transparent, 0), new GradientStop(Colors.Black, 0.18),
+                new GradientStop(Colors.Black, 0.82), new GradientStop(Colors.Transparent, 1),
+            }) { MappingMode = BrushMappingMode.Absolute, StartPoint = new Point(0, 0), EndPoint = new Point(0, 800) };
+            _lyricsHost.OpacityMask = mask;
+            _lyricsHost.SizeChanged += (s, e) => mask.EndPoint = new Point(0, Math.Max(1, _lyricsHost.ActualHeight));
             var canvas = new Canvas();
             _lyricsStack.RenderTransform = _lyricsShift;
             canvas.Children.Add(_lyricsStack);
