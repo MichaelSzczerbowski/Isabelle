@@ -116,6 +116,14 @@ namespace IslandPlayer
             PrevBtn.Click += (s, e) => _media.Previous();
             AppBtn.Click += (s, e) => _media.CycleApp();
             LyricsBtn.Click += (s, e) => ToggleLyrics();
+            ArtHost.Cursor = Cursors.Hand;
+            ArtHost.MouseLeftButtonDown += (s, e) => { if (_expanded && _snap != null) e.Handled = true; };
+            ArtHost.MouseLeftButtonUp += (s, e) =>
+            {
+                if (!_expanded || _snap == null) return;
+                e.Handled = true;
+                ToggleTrackInfo();
+            };
             foreach (var v in new FrameworkElement[] { CompactView, ToastView, ExpandedView, IdleExpandedView, CompactVView, ToastVView })
                 v.RenderTransform = _swipeShift;
             OpenSpotifyBtn.Click += (s, e) => OpenSpotify();
@@ -407,6 +415,7 @@ namespace IslandPlayer
                 _lyricsKey = null;
                 LyricsStack.Children.Clear();
                 if (App.Config.Lyrics) LoadLyrics();
+                if (_infoOn) LoadTrackInfo(snap);
                 if (oldKey != null && oldApp == snap.AppId && App.Config.TrackToast && !_expanded)
                 {
                     _toastKind = "track";
@@ -568,6 +577,76 @@ namespace IslandPlayer
             else
                 _media.PlayPause();
             EnsureLoop();
+        }
+
+        // ================= informacje o utworze =================
+        private bool _infoOn;
+        private bool InfoVisible => _infoOn && _snap != null;
+
+        private void ToggleTrackInfo()
+        {
+            _infoOn = !_infoOn;
+            if (_infoOn) LoadTrackInfo(_snap);
+            EnsureLoop();
+        }
+
+        private async void LoadTrackInfo(MediaSnapshot snap)
+        {
+            if (snap == null) return;
+            string key = snap.Key;
+            SetInfoLines((L.T("Szukam informacji…", "Looking up info…"), null), (null, null), (null, null));
+            var info = await TrackInfoService.Get(snap.Title, snap.Artist);
+            if (_snap == null || _snap.Key != key) return;
+            if (info == null)
+            {
+                SetInfoLines((L.T("Brak informacji o tym utworze", "No info about this track"), null), (null, null), (null, null));
+                return;
+            }
+            double len = _snap.Duration > 0 ? _snap.Duration : info.Length;
+            string album = info.Album + (info.Single ? L.T("  (singiel)", "  (single)") : "");
+            string track = info.TrackNumber > 0 && info.TrackCount > 1 && !info.Single
+                ? $"{info.TrackNumber} {L.T("z", "of")} {info.TrackCount}" : null;
+            SetInfoLines(
+                (L.T("ALBUM", "ALBUM"), album.Length > 0 ? album : "—", null, null),
+                (L.T("ROK", "YEAR"), info.Year > 0 ? info.Year.ToString() : "—", L.T("GATUNEK", "GENRE"), info.Genre.Length > 0 ? info.Genre : "—"),
+                (track != null ? L.T("UTWÓR", "TRACK") : L.T("DŁUGOŚĆ", "LENGTH"), track ?? Time(len),
+                 track != null ? L.T("DŁUGOŚĆ", "LENGTH") : null, track != null ? Time(len) : null));
+        }
+
+        private static string Time(double s)
+        {
+            if (s <= 0) return "—";
+            var t = TimeSpan.FromSeconds(s);
+            return t.TotalHours >= 1 ? t.ToString(@"h\:mm\:ss") : t.ToString(@"m\:ss");
+        }
+
+        private void SetInfoLines((string label, string value) a, (string label, string value) b, (string label, string value) c)
+            => SetInfoLines((a.label, a.value, null, null), (b.label, b.value, null, null), (c.label, c.value, null, null));
+
+        private void SetInfoLines((string l1, string v1, string l2, string v2) a, (string l1, string v1, string l2, string v2) b,
+                                  (string l1, string v1, string l2, string v2) c)
+        {
+            Fill(InfoLine1, a);
+            Fill(InfoLine2, b);
+            Fill(InfoLine3, c);
+
+            static void Fill(TextBlock tb, (string l1, string v1, string l2, string v2) x)
+            {
+                tb.Inlines.Clear();
+                void Pair(string label, string value)
+                {
+                    if (label == null) return;
+                    if (value == null) { tb.Inlines.Add(new System.Windows.Documents.Run(label) { Foreground = new SolidColorBrush(Color.FromArgb(170, 255, 255, 255)) }); return; }
+                    tb.Inlines.Add(new System.Windows.Documents.Run(label + "  ")
+                    {
+                        FontSize = 10.5, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromArgb(120, 255, 255, 255)),
+                    });
+                    tb.Inlines.Add(new System.Windows.Documents.Run(value));
+                }
+                Pair(x.l1, x.v1);
+                if (x.l2 != null) tb.Inlines.Add(new System.Windows.Documents.Run("     "));
+                Pair(x.l2, x.v2);
+            }
         }
 
         private void ToggleLyrics()
@@ -878,7 +957,7 @@ namespace IslandPlayer
             if (_vertical)
             {
                 if (ToastActive("vol")) return (36, 220);
-                if (_expanded) return has ? (260, LyricsVisible ? 504 : 408) : (220, 130);
+                if (_expanded) return has ? (260, LyricsVisible || InfoVisible ? 504 : 408) : (220, 130);
                 if (has && ToastActive("track")) return (150, 160);
                 if (has) return (32, 150);
                 switch (App.Config.IdleMode)
@@ -889,7 +968,7 @@ namespace IslandPlayer
                 }
             }
             if (ToastActive("vol")) return (240, 36);
-            if (_expanded) return has ? (370, LyricsVisible ? 272 : 176) : (300, 96);
+            if (_expanded) return has ? (370, LyricsVisible || InfoVisible ? 272 : 176) : (300, 96);
             if (has && ToastActive("track")) return (330, 76);
             if (has) return (App.Config.CompactTitle ? 280 : 180, 32);
             switch (App.Config.IdleMode)
@@ -999,7 +1078,9 @@ namespace IslandPlayer
             AnimateBackground(bg && expOp > 0, expOp, dt, IsPlaying);
             BgDim.Opacity = bg ? expOp : 0;
 
-            LyricsPanel.Visibility = LyricsVisible ? Visibility.Visible : Visibility.Collapsed;
+            if (!_expanded && _infoOn) _infoOn = false;     // po zwinięciu wyspy wraca zwykły widok
+            LyricsPanel.Visibility = LyricsVisible && !_infoOn ? Visibility.Visible : Visibility.Collapsed;
+            TrackInfoPanel.Visibility = InfoVisible ? Visibility.Visible : Visibility.Collapsed;
 
             // ---- poziom dźwięku ----
             bool playing = IsPlaying;

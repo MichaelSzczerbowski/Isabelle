@@ -327,6 +327,13 @@
                         </Canvas>
                     </Grid>
 
+                    <!-- informacje o utworze (kliknięcie w okładkę) -->
+                    <StackPanel x:Name="TrackInfoPanel" Height="84" Margin="18,12,18,0" Visibility="Collapsed" Background="Transparent">
+                        <TextBlock x:Name="InfoLine1" FontSize="13" Foreground="White" TextTrimming="CharacterEllipsis" Margin="0,4,0,0" />
+                        <TextBlock x:Name="InfoLine2" FontSize="13" Foreground="White" TextTrimming="CharacterEllipsis" Margin="0,8,0,0" />
+                        <TextBlock x:Name="InfoLine3" FontSize="13" Foreground="White" TextTrimming="CharacterEllipsis" Margin="0,8,0,0" />
+                    </StackPanel>
+
                     <!-- pasek postępu -->
                     <Grid x:Name="SeekArea" Height="14" Margin="18,14,18,0" Background="Transparent" Cursor="Hand">
                         <Border x:Name="TrackBg" Height="4" CornerRadius="2" Background="#33FFFFFF" VerticalAlignment="Center" />
