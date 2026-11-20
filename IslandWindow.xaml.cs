@@ -1209,7 +1209,9 @@ namespace IslandPlayer
             if (snap == null || string.IsNullOrWhiteSpace(snap.Title)) return;
             try
             {
-                var card = ShareCard.Render(_cover, snap.Title, snap.Artist, snap.PositionNow(DateTime.UtcNow), snap.Duration, _accent);
+                var (link, linkLabel) = ShareCard.Link(snap.AppId, snap.Title, snap.Artist);
+                var card = ShareCard.Render(_cover, snap.Title, snap.Artist, snap.PositionNow(DateTime.UtcNow), snap.Duration, _accent,
+                                            link, linkLabel);
                 ShareCard.SaveAndCopy(card, snap.Title, snap.Artist);
             }
             catch (Exception ex)

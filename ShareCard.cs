@@ -17,10 +17,24 @@ namespace IslandPlayer
     /// </summary>
     public static class ShareCard
     {
-        private const double W = 1080, H = 1350, ArtSize = 760, Left = (W - ArtSize) / 2;
+        private const double W = 1080, H = 1350, ArtSize = 720, Left = (W - ArtSize) / 2, QrSize = 210;
+
+        /// <summary>Link do utworu: wyszukiwanie w Spotify (albo w YouTube, gdy gra przeglądarka).</summary>
+        public static (string url, string label) Link(string appId, string title, string artist)
+        {
+            string q = Uri.EscapeDataString($"{artist} {title}".Trim());
+            bool spotify = (appId ?? "").IndexOf("spotify", StringComparison.OrdinalIgnoreCase) >= 0
+                        || (appId ?? "").IndexOf("chrome", StringComparison.OrdinalIgnoreCase) < 0
+                           && (appId ?? "").IndexOf("edge", StringComparison.OrdinalIgnoreCase) < 0
+                           && (appId ?? "").IndexOf("firefox", StringComparison.OrdinalIgnoreCase) < 0
+                           && (appId ?? "").IndexOf("opera", StringComparison.OrdinalIgnoreCase) < 0;
+            return spotify
+                ? ("https://open.spotify.com/search/" + q, L.T("Posłuchaj na Spotify", "Listen on Spotify"))
+                : ("https://www.youtube.com/results?search_query=" + q, L.T("Obejrzyj na YouTube", "Watch on YouTube"));
+        }
 
         public static BitmapSource Render(BitmapSource cover, string title, string artist,
-                                          double position, double duration, Color accent)
+                                          double position, double duration, Color accent, string link, string linkLabel)
         {
             var root = new Canvas { Width = W, Height = H, Background = new SolidColorBrush(Color.FromRgb(16, 16, 20)), ClipToBounds = true };
 
@@ -57,7 +71,7 @@ namespace IslandPlayer
                 Effect = new DropShadowEffect { BlurRadius = 70, ShadowDepth = 18, Opacity = 0.55, Color = Colors.Black, Direction = 270 },
             };
             Canvas.SetLeft(art, Left);
-            Canvas.SetTop(art, 120);
+            Canvas.SetTop(art, 86);
             root.Children.Add(art);
 
             // tytuł i wykonawca
@@ -67,7 +81,7 @@ namespace IslandPlayer
                 FontFamily = new FontFamily("Segoe UI"), TextTrimming = TextTrimming.CharacterEllipsis,
             };
             Canvas.SetLeft(titleText, Left);
-            Canvas.SetTop(titleText, 928);
+            Canvas.SetTop(titleText, 838);
             root.Children.Add(titleText);
 
             var artistText = new TextBlock
@@ -76,7 +90,7 @@ namespace IslandPlayer
                 FontFamily = new FontFamily("Segoe UI"), TextTrimming = TextTrimming.CharacterEllipsis,
             };
             Canvas.SetLeft(artistText, Left);
-            Canvas.SetTop(artistText, 1000);
+            Canvas.SetTop(artistText, 908);
             root.Children.Add(artistText);
 
             // pasek postępu
@@ -85,22 +99,22 @@ namespace IslandPlayer
                 double frac = Math.Clamp(position / duration, 0, 1);
                 var track = new Rectangle { Width = ArtSize, Height = 10, RadiusX = 5, RadiusY = 5, Fill = new SolidColorBrush(Color.FromArgb(60, 255, 255, 255)) };
                 Canvas.SetLeft(track, Left);
-                Canvas.SetTop(track, 1090);
+                Canvas.SetTop(track, 990);
                 root.Children.Add(track);
                 var fill = new Rectangle { Width = Math.Max(10, ArtSize * frac), Height = 10, RadiusX = 5, RadiusY = 5, Fill = new SolidColorBrush(Bright(accent)) };
                 Canvas.SetLeft(fill, Left);
-                Canvas.SetTop(fill, 1090);
+                Canvas.SetTop(fill, 990);
                 root.Children.Add(fill);
 
                 var timeBrush = new SolidColorBrush(Color.FromArgb(150, 255, 255, 255));
                 var t1 = new TextBlock { Text = Time(position), FontSize = 26, Foreground = timeBrush, FontFamily = new FontFamily("Segoe UI") };
                 Canvas.SetLeft(t1, Left);
-                Canvas.SetTop(t1, 1114);
+                Canvas.SetTop(t1, 1012);
                 root.Children.Add(t1);
                 var t2 = new TextBlock { Text = Time(duration), FontSize = 26, Foreground = timeBrush, FontFamily = new FontFamily("Segoe UI"),
                                          Width = 200, TextAlignment = TextAlignment.Right };
                 Canvas.SetLeft(t2, Left + ArtSize - 200);
-                Canvas.SetTop(t2, 1114);
+                Canvas.SetTop(t2, 1012);
                 root.Children.Add(t2);
             }
 
@@ -119,10 +133,38 @@ namespace IslandPlayer
                 Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
             };
             footer.Children.Add(logo);
+            double qrTop = 1080;
+            bool hasQr = !string.IsNullOrEmpty(link);
             footer.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            Canvas.SetLeft(footer, (W - footer.DesiredSize.Width) / 2);
-            Canvas.SetTop(footer, 1238);
+            Canvas.SetLeft(footer, hasQr ? Left : (W - footer.DesiredSize.Width) / 2);
+            Canvas.SetTop(footer, hasQr ? qrTop + QrSize - footer.DesiredSize.Height - 6 : 1150);
             root.Children.Add(footer);
+
+            // kod QR z linkiem do utworu (na Instagramie da się go zeskanować drugim telefonem)
+            if (hasQr)
+            {
+                var label = new TextBlock
+                {
+                    Text = linkLabel, FontSize = 34, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White,
+                    FontFamily = new FontFamily("Segoe UI"), Width = ArtSize - QrSize - 30, TextWrapping = TextWrapping.Wrap,
+                };
+                Canvas.SetLeft(label, Left);
+                Canvas.SetTop(label, qrTop + 8);
+                root.Children.Add(label);
+                var hint = new TextBlock
+                {
+                    Text = L.T("zeskanuj kod aparatem →", "scan the code with your camera →"), FontSize = 26,
+                    Foreground = new SolidColorBrush(Color.FromArgb(150, 255, 255, 255)), FontFamily = new FontFamily("Segoe UI"),
+                };
+                Canvas.SetLeft(hint, Left);
+                Canvas.SetTop(hint, qrTop + 58);
+                root.Children.Add(hint);
+
+                var qr = Qr(link);
+                Canvas.SetLeft(qr, Left + ArtSize - QrSize);
+                Canvas.SetTop(qr, qrTop);
+                root.Children.Add(qr);
+            }
 
             root.Measure(new Size(W, H));
             root.Arrange(new Rect(0, 0, W, H));
@@ -131,6 +173,26 @@ namespace IslandPlayer
             rtb.Render(root);
             rtb.Freeze();
             return rtb;
+        }
+
+        /// <summary>Kod QR jako biały zaokrąglony kafelek z czarnymi modułami.</summary>
+        private static FrameworkElement Qr(string text)
+        {
+            using var gen = new QRCoder.QRCodeGenerator();
+            using var data = gen.CreateQrCode(text, QRCoder.QRCodeGenerator.ECCLevel.M);
+            var m = data.ModuleMatrix;              // razem z białym marginesem
+            int n = m.Count;
+            var geo = new GeometryGroup { FillRule = FillRule.Nonzero };
+            for (int y = 0; y < n; y++)
+                for (int x = 0; x < n; x++)
+                    if (m[y][x]) geo.Children.Add(new RectangleGeometry(new Rect(x, y, 1.02, 1.02)));
+            var modules = new System.Windows.Shapes.Path { Data = geo, Fill = Brushes.Black, Stretch = Stretch.Fill,
+                                                           Width = QrSize - 20, Height = QrSize - 20, Margin = new Thickness(10),
+                                                           SnapsToDevicePixels = true };
+            // Stretch=Fill liczy się od czarnych modułów, więc dokładamy niewidoczne narożniki całej siatki
+            geo.Children.Add(new RectangleGeometry(new Rect(0, 0, 0.001, 0.001)));
+            geo.Children.Add(new RectangleGeometry(new Rect(n - 0.001, n - 0.001, 0.001, 0.001)));
+            return new Border { Width = QrSize, Height = QrSize, CornerRadius = new CornerRadius(22), Background = Brushes.White, Child = modules };
         }
 
         /// <summary>Zapisuje kartę w Obrazy\Isabelle i kopiuje do schowka (obraz + plik). Zwraca ścieżkę pliku.</summary>
