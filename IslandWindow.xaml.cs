@@ -929,6 +929,15 @@ namespace IslandPlayer
 
             bool bg = App.Config.AlbumBackground && _cover != null;
             BgCover.Opacity = bg ? expOp * 0.95 : 0;
+            if (bg && expOp > 0)
+            {
+                // obrazek tła zawsze na środku wyspy (Canvas nie centruje sam)
+                double bx = (w - BgCover.Width) / 2, by = (h - BgCover.Height) / 2;
+                System.Windows.Controls.Canvas.SetLeft(BgCover, bx);
+                System.Windows.Controls.Canvas.SetTop(BgCover, by);
+                System.Windows.Controls.Canvas.SetLeft(BgCover2, bx);
+                System.Windows.Controls.Canvas.SetTop(BgCover2, by);
+            }
             AnimateBackground(bg && expOp > 0, expOp, dt, IsPlaying);
             BgDim.Opacity = bg ? expOp : 0;
 

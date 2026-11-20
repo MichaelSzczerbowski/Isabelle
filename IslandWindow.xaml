@@ -99,19 +99,21 @@
                 Background="Black" Width="44" Height="30" CornerRadius="15">
             <Grid x:Name="PillInner" ClipToBounds="True">
 
-                <!-- rozmyta okładka w tle (jak w Apple Music) -->
-                <Image x:Name="BgCover" Stretch="UniformToFill" Width="720" Height="720"
-                       HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0" IsHitTestVisible="False">
-                    <Image.Effect>
-                        <BlurEffect Radius="70" RenderingBias="Performance" />
-                    </Image.Effect>
-                </Image>
-                <Image x:Name="BgCover2" Stretch="UniformToFill" Width="720" Height="720"
-                       HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0" IsHitTestVisible="False">
-                    <Image.Effect>
-                        <BlurEffect Radius="80" RenderingBias="Performance" />
-                    </Image.Effect>
-                </Image>
+                <!-- rozmyta okładka w tle (jak w Apple Music).
+                     W Canvas, bo zwykła siatka przycinała duży obrazek do rozmiaru wyspy,
+                     a przy obracaniu było widać rogi tego przyciętego prostokąta. -->
+                <Canvas x:Name="BgHost" IsHitTestVisible="False">
+                    <Image x:Name="BgCover" Stretch="UniformToFill" Width="720" Height="720" Opacity="0" IsHitTestVisible="False">
+                        <Image.Effect>
+                            <BlurEffect Radius="70" RenderingBias="Performance" />
+                        </Image.Effect>
+                    </Image>
+                    <Image x:Name="BgCover2" Stretch="UniformToFill" Width="720" Height="720" Opacity="0" IsHitTestVisible="False">
+                        <Image.Effect>
+                            <BlurEffect Radius="80" RenderingBias="Performance" />
+                        </Image.Effect>
+                    </Image>
+                </Canvas>
                 <Border x:Name="BgDim" Background="#A0000000" Opacity="0" IsHitTestVisible="False" />
 
                 <!-- spoczynek: kropka / zegar -->
