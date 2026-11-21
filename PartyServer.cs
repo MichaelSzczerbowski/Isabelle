@@ -209,7 +209,7 @@ namespace IslandPlayer
                 LastAdd[ip] = DateTime.UtcNow;
             }
             var req = new PartyRequest { By = by, Source = src };
-            string err = null;
+            var item = new PendingItem { Req = req };
             if (src == "lib")
             {
                 string path = FromId(id);
@@ -217,18 +217,19 @@ namespace IslandPlayer
                 if (t == null) return JsonSerializer.Serialize(new { ok = false, msg = L.T("Nie ma takiej piosenki", "No such song") });
                 req.Title = t.Title;
                 req.Artist = t.Artist;
-                var ui = System.Windows.Application.Current?.Dispatcher;
-                if (ui != null) await ui.InvokeAsync(() => LocalPlayer.Enqueue(t));
+                item.Track = t;
             }
             else if (src == "spotify" && id.StartsWith("spotify:track:") && SpotifyService.CanPlay)
             {
                 req.Title = q.TryGetValue("title", out var tt) ? tt : "";
                 req.Artist = q.TryGetValue("artist", out var aa) ? aa : "";
-                err = await SpotifyService.QueueAsync(id);
+                item.Uri = id;
             }
             else return JsonSerializer.Serialize(new { ok = false, msg = "?" });
 
-            if (err != null) return JsonSerializer.Serialize(new { ok = false, msg = err });
+            // do kolejki imprezy - zagra po obecnej piosence (nie przerywa jej)
+            var ui = System.Windows.Application.Current?.Dispatcher;
+            if (ui != null) await ui.InvokeAsync(() => { lock (Lock) Pending.Add(item); EnsurePump(); Pump(); });
             lock (Lock)
             {
                 Requests.Add(req);
@@ -236,6 +237,95 @@ namespace IslandPlayer
             }
             try { Added?.Invoke(req); } catch (Exception ex) { Log.Error(ex); }
             return JsonSerializer.Serialize(new { ok = true, msg = L.T("Dodano do kolejki 🎉", "Added to the queue 🎉") });
+        }
+
+        // ================= kolejka imprezy =================
+        // Piosenki gości grają PO obecnej, w kolejności dodania. Gdy się da - trafiają do natywnej kolejki
+        // (Moja muzyka: „zagraj następne”, Spotify: kolejka Spotify). Gdy gra coś innego - czekamy na koniec
+        // obecnej piosenki i wtedy przełączamy. Gdy nic nie gra - impreza startuje od razu.
+        private sealed class PendingItem
+        {
+            public LibraryTrack Track;
+            public string Uri;
+            public PartyRequest Req;
+        }
+
+        private static readonly List<PendingItem> Pending = new List<PendingItem>();
+        private static System.Windows.Threading.DispatcherTimer _pump;
+        private static string _waitKey;
+        private static DateTime _cooldownUntil = DateTime.MinValue;
+
+        /// <summary>Ile piosenek gości czeka na swoją kolej (poza natywnymi kolejkami).</summary>
+        public static int PendingCount { get { lock (Lock) return Pending.Count; } }
+
+        private static void EnsurePump()
+        {
+            if (_pump != null) return;
+            _pump = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
+            _pump.Tick += (s, e) => Pump();
+            _pump.Start();
+        }
+
+        private static void Pump()
+        {
+            try
+            {
+                if (DateTime.UtcNow < _cooldownUntil) return;
+                while (true)
+                {
+                    PendingItem head;
+                    lock (Lock) head = Pending.Count > 0 ? Pending[0] : null;
+                    if (head == null) { _waitKey = null; return; }
+
+                    var island = App.Island;
+                    var snap = island?.Snapshot;
+                    bool playing = island?.Playing == true && snap != null && !string.IsNullOrEmpty(snap.Title);
+                    string app = (snap?.AppId ?? "").ToLowerInvariant();
+                    bool ownList = playing && app.Contains("isabelle") && LocalPlayer.CurrentTrack != null && LocalPlayer.CurrentStation == null && !LocalPlayer.PlayingPreview;
+                    bool spotifyOn = playing && app.Contains("spotify");
+
+                    // 1) natywna kolejka obecnego odtwarzacza - bez żadnej przerwy
+                    if (head.Track != null && ownList) { Remove(head); LocalPlayer.Enqueue(head.Track); continue; }
+                    if (head.Uri != null && spotifyOn) { Remove(head); _ = SpotifyService.QueueAsync(head.Uri, playIfIdle: false); continue; }
+
+                    // 2) nic nie gra - startujemy od razu
+                    if (!playing) { Remove(head); StartNow(head, snap); return; }
+
+                    // 3) gra coś innego - czekamy na koniec obecnej piosenki
+                    _waitKey ??= snap.Key;
+                    bool ending = snap.Duration > 0 && snap.Duration - snap.PositionNow(DateTime.UtcNow) <= 1.2;
+                    bool changed = snap.Key != _waitKey;
+                    if (ending || changed) { Remove(head); StartNow(head, snap); }
+                    return;
+                }
+            }
+            catch (Exception ex) { Log.Info("impreza kolejka: " + ex.Message); }
+        }
+
+        private static void Remove(PendingItem it)
+        {
+            lock (Lock) Pending.Remove(it);
+            _waitKey = null;
+        }
+
+        /// <summary>Włącza piosenkę gościa (najpierw zatrzymuje to, co grało).</summary>
+        private static void StartNow(PendingItem it, MediaSnapshot current)
+        {
+            _cooldownUntil = DateTime.UtcNow.AddSeconds(4);       // wyspa musi zauważyć nową piosenkę
+            if (current != null)
+            {
+                string app = current.AppId ?? "";
+                bool ownIsPlaying = app.IndexOf("Isabelle", StringComparison.OrdinalIgnoreCase) >= 0;
+                // ten sam odtwarzacz i tak przełączy utwór - pauzujemy tylko „obcy”
+                if (it.Track != null && !ownIsPlaying) App.Island?.PauseApp(app);
+                if (it.Uri != null && app.IndexOf("spotify", StringComparison.OrdinalIgnoreCase) < 0)
+                {
+                    if (ownIsPlaying) { if (LocalPlayer.IsPlaying) LocalPlayer.TogglePause(); }
+                    else App.Island?.PauseApp(app);
+                }
+            }
+            if (it.Track != null) LocalPlayer.PlayTracks(new[] { it.Track }, 0, false);
+            else if (it.Uri != null) _ = SpotifyService.PlayAsync(it.Uri);
         }
 
         // ================= pomocnicze =================

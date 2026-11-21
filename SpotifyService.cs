@@ -370,13 +370,13 @@ namespace IslandPlayer
         }
 
         /// <summary>Dodaje utwór do kolejki Spotify (zagra po obecnym). Gdy Spotify nic nie gra - włącza go od razu.</summary>
-        public static async Task<string> QueueAsync(string uri)
+        public static async Task<string> QueueAsync(string uri, bool playIfIdle = true)
         {
             try
             {
                 var (status, text) = await Send(HttpMethod.Post, "https://api.spotify.com/v1/me/player/queue?uri=" + Uri.EscapeDataString(uri));
                 if (status >= 200 && status < 300) return null;
-                if (status == 404) return await PlayAsync(uri);          // brak aktywnego urządzenia
+                if (status == 404 && playIfIdle) return await PlayAsync(uri);          // brak aktywnego urządzenia
                 if (status == 403) return L.T("Spotify pozwala na to tylko z kontem Premium.", "Spotify only allows this with Premium.");
                 return "Spotify: " + status;
             }

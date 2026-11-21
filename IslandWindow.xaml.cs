@@ -694,6 +694,8 @@ namespace IslandPlayer
         public bool ForegroundFullscreen => _fgFullscreen && !FullscreenPlayer.IsOpen;
         public void TogglePlay() => PlayPause();
         public void Next() => _media.Next();
+        /// <summary>Pauzuje konkretny odtwarzacz (np. Spotify) - tryb imprezy.</summary>
+        public void PauseApp(string appId) => _media.PauseApp(appId);
         public void Previous() => _media.Previous();
         public void SeekTo(double seconds)
         {
