@@ -363,6 +363,7 @@ namespace IslandPlayer
                         break;
                     case 7: FullscreenPlayer.Toggle(); break;
                     case 8: LibraryWindow.ShowWindow(); break;
+                    case 9: QuickSearchWindow.Toggle(); break;
                     case 5:
                     case 6:
                         if (_audio != null)

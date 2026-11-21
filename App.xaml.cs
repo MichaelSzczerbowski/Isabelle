@@ -85,6 +85,8 @@ namespace IslandPlayer
             Island.Show();
             _tray = new TrayIcon();
             WhatsNewWindow.ShowIfUpdated();
+            Equalizer.Load();
+            LibraryService.StartWatching();
 
             UpdateService.Found += info => Current.Dispatcher.BeginInvoke(new Action(() => _tray?.ShowUpdate(info)));
             _ = UpdateLoopAsync();

@@ -216,6 +216,8 @@ namespace IslandPlayer
             _pageMusic.Children.Add(sideScroll);
             PlaylistStore.Changed += OnPlaylistsChanged;
             Closed += (s, e) => PlaylistStore.Changed -= OnPlaylistsChanged;
+            PlayStats.Changed += OnStatsChanged;
+            Closed += (s, e) => PlayStats.Changed -= OnStatsChanged;
 
             // folder + przyciski
             var bar = new Grid { Margin = new Thickness(0, 0, 0, 10) };
@@ -230,6 +232,17 @@ namespace IslandPlayer
             Grid.SetColumn(buttons, 1);
             buttons.Children.Add(Pill(L.T("Dodaj pliki", "Add files"), false, AddFiles));
             buttons.Children.Add(Pill(L.T("Wybierz folder", "Choose folder"), false, ChooseFolder));
+            Border watchPill = null, eqPill = null;
+            watchPill = Pill(L.T("Śledź folder", "Watch folder"), false, () => WatchMenu(watchPill));
+            watchPill.ToolTip = L.T("Nowa muzyka z wybranego folderu (np. Pobrane) sama trafi do biblioteki", "New music from a chosen folder (e.g. Downloads) is added to your library automatically");
+            buttons.Children.Add(watchPill);
+            eqPill = Pill(L.T("Korektor", "Equalizer"), false, () =>
+            {
+                var menu = new GlassMenu(_accent);
+                menu.Custom(EqualizerPanel.Build(_accent));
+                menu.Show(eqPill);
+            });
+            buttons.Children.Add(eqPill);
             buttons.Children.Add(PlayButton());
             bar.Children.Add(buttons);
             Grid.SetColumn(bar, 1);
@@ -295,6 +308,56 @@ namespace IslandPlayer
         private readonly StackPanel _side = new StackPanel();
         private string _view = "all";     // all | liked | pl:{id}
 
+        /// <summary>Inteligentne playlisty - układają się same ze statystyk słuchania i dat dodania.</summary>
+        private static readonly (string key, string pl, string en, string icon)[] SmartLists =
+        {
+            ("smart:top", "Najczęściej grane", "Most played", "M12,2 L14.9,8.6 L22,9.3 L16.6,14 L18.2,21 L12,17.3 L5.8,21 L7.4,14 L2,9.3 L9.1,8.6 Z"),
+            ("smart:new", "Ostatnio dodane", "Recently added", "M12,2 C12.8,7.5 16.5,11.2 22,12 C16.5,12.8 12.8,16.5 12,22 C11.2,16.5 7.5,12.8 2,12 C7.5,11.2 11.2,7.5 12,2 Z"),
+            ("smart:old", "Dawno niesłuchane", "Not played lately", "M6,2 H18 V6.5 L13.6,12 L18,17.5 V22 H6 V17.5 L10.4,12 L6,6.5 Z"),
+        };
+        private const int SmartLimit = 50;
+
+        private void OnStatsChanged() => Dispatcher.BeginInvoke(new Action(() => { if (_view.StartsWith("smart:")) Filter(); }));
+
+        /// <summary>Menu „Śledź folder”: Pobrane jednym kliknięciem, inny folder albo wyłączenie.</summary>
+        private void WatchMenu(FrameworkElement anchor)
+        {
+            var menu = new GlassMenu(_accent);
+            string cur = App.Config.WatchFolder ?? "";
+            menu.Header(cur.Length > 0
+                ? L.T("Śledzony: ", "Watching: ") + System.IO.Path.GetFileName(cur.TrimEnd('\\'))
+                : L.T("Nowa muzyka z folderu sama trafi do biblioteki", "New music from a folder joins your library"));
+            string downloads = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+            if (System.IO.Directory.Exists(downloads))
+                menu.Check(L.T("Pobrane", "Downloads"), GlassMenu.ListIcon, string.Equals(cur, downloads, StringComparison.OrdinalIgnoreCase), on => SetWatch(on ? downloads : ""));
+            menu.Item(L.T("Wybierz inny folder…", "Choose another folder…"), GlassMenu.PlusIcon, () =>
+            {
+                using var dlg = new System.Windows.Forms.FolderBrowserDialog
+                {
+                    Description = L.T("Folder, z którego nowa muzyka ma trafiać do biblioteki", "Folder whose new music should join your library"),
+                    UseDescriptionForTitle = true,
+                    SelectedPath = cur.Length > 0 ? cur : downloads,
+                };
+                if (dlg.ShowDialog() == System.Windows.Forms.DialogResult.OK) SetWatch(dlg.SelectedPath);
+            });
+            if (cur.Length > 0)
+            {
+                menu.Separator();
+                menu.Item(L.T("Przestań śledzić", "Stop watching"), GlassMenu.MinusIcon, () => SetWatch(""), danger: true);
+            }
+            menu.Show(anchor);
+        }
+
+        private void SetWatch(string folder)
+        {
+            App.Config.WatchFolder = folder ?? "";
+            App.Config.Save();
+            LibraryService.StartWatching();
+            _folderText.Text = folder?.Length > 0
+                ? L.T("Śledzę: ", "Watching: ") + folder + L.T(" - nowa muzyka sama się doda", " - new music will be added automatically")
+                : (App.Config.LibraryFolder ?? "");
+        }
+
         private void OnPlaylistsChanged() => Dispatcher.BeginInvoke(new Action(() =>
         {
             RefreshSidebar();
@@ -308,6 +371,21 @@ namespace IslandPlayer
             int all = LibraryService.Tracks.Count;
             _side.Children.Add(SideItem(L.T("Wszystkie utwory", "All tracks"), all, "all", null));
             _side.Children.Add(SideItem(L.T("Polubione", "Liked"), PlaylistStore.LikedCount, "liked", "M12,21.35 L10.55,20.03 C5.4,15.36 2,12.28 2,8.5 C2,5.42 4.42,3 7.5,3 C9.24,3 10.91,3.81 12,5.09 C13.09,3.81 14.76,3 16.5,3 C19.58,3 22,5.42 22,8.5 C22,12.28 18.6,15.36 13.45,20.04 Z"));
+            _side.Children.Add(new TextBlock { Text = L.T("Dla Ciebie", "Made for you"), FontSize = 12, Foreground = TextSub, Margin = new Thickness(12, 16, 0, 4) });
+            foreach (var (key, pl, en, icon) in SmartLists)
+            {
+                var smart = SideItem(L.T(pl, en), -1, key, icon);
+                string k = key;
+                smart.MouseRightButtonUp += (s, e) =>
+                {
+                    e.Handled = true;
+                    var menu = new GlassMenu(_accent);
+                    menu.Item(L.T("Odtwórz", "Play"), GlassMenu.PlayIcon, () => { _view = k; RefreshSidebar(); Filter(); Play(0, false); });
+                    menu.Item(L.T("Odtwórz losowo", "Shuffle"), GlassMenu.ShuffleIcon, () => { _view = k; RefreshSidebar(); Filter(); Play(0, true); });
+                    menu.Show(smart, atMouse: true);
+                };
+                _side.Children.Add(smart);
+            }
             _side.Children.Add(new TextBlock { Text = L.T("Playlisty", "Playlists"), FontSize = 12, Foreground = TextSub, Margin = new Thickness(12, 16, 0, 4) });
             foreach (var pl in PlaylistStore.Playlists)
             {
@@ -533,6 +611,7 @@ namespace IslandPlayer
             if (dlg.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
             App.Config.LibraryFolder = dlg.SelectedPath;
             App.Config.Save();
+            LibraryService.StartWatching();
             UpdateFolder();
             _ = LibraryService.ScanAsync(dlg.SelectedPath);
         }
@@ -550,6 +629,16 @@ namespace IslandPlayer
             var all = LibraryService.Tracks.ToList();
             IEnumerable<LibraryTrack> view = all;
             if (_view == "liked") view = all.Where(t => t.Liked);
+            else if (_view == "smart:top")
+                view = all.Where(t => PlayStats.Plays(t.Path) > 0)
+                          .OrderByDescending(t => PlayStats.Plays(t.Path)).ThenByDescending(t => PlayStats.Last(t.Path)).Take(SmartLimit);
+            else if (_view == "smart:new") view = all.OrderByDescending(t => t.Added).Take(SmartLimit);
+            else if (_view == "smart:old")
+            {
+                // nie grane od miesiąca albo nigdy - najdawniej słuchane na górze
+                long monthAgo = DateTime.UtcNow.AddDays(-30).Ticks;
+                view = all.Where(t => PlayStats.Last(t.Path) < monthAgo).OrderBy(t => PlayStats.Last(t.Path)).ThenBy(t => t.Added).Take(SmartLimit);
+            }
             else if (_view.StartsWith("pl:"))
             {
                 // playlista: w jej kolejności, pomijając pliki, których już nie ma
@@ -566,6 +655,8 @@ namespace IslandPlayer
                     ? L.T("Przeciągnij tu pliki MP3, kliknij „Dodaj pliki” albo wskaż folder, w którym trzymasz muzykę.", "Drag MP3 files here, click “Add files” or choose the folder where your music is.")
                     : LibraryService.Scanning ? L.T("Szukam muzyki…", "Looking for music…") : L.T("Brak plików muzycznych w tym folderze.", "No music files in this folder."))
                 : _shown.Count == 0 && q.Length == 0 && _view == "liked" ? L.T("Kliknij serduszko przy utworze, żeby go polubić.", "Click the heart next to a track to like it.")
+                : _shown.Count == 0 && q.Length == 0 && _view == "smart:top" ? L.T("Tu pojawią się utwory, których słuchasz najczęściej. Posłuchaj czegoś z biblioteki!", "Your most played tracks will show up here. Play something from your library!")
+                : _shown.Count == 0 && q.Length == 0 && _view == "smart:old" ? L.T("Wszystko słuchane w ostatnim miesiącu 👌", "You've played everything in the last month 👌")
                 : _shown.Count == 0 && q.Length == 0 && _view.StartsWith("pl:") ? L.T("Playlista jest pusta. Kliknij prawym przyciskiem utwór i wybierz „Dodaj do playlisty”.", "This playlist is empty. Right-click a track and choose “Add to playlist”.")
                 : "";
             _status.Visibility = _status.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;

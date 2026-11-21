@@ -58,6 +58,9 @@ namespace IslandPlayer
         public void Header(string text) =>
             _items.Children.Add(new TextBlock { Text = text, FontSize = 11.5, FontWeight = FontWeights.SemiBold, Foreground = Hex("#80FFFFFF"), Margin = new Thickness(12, 6, 12, 6) });
 
+        /// <summary>Dowolna zawartość (np. panel korektora).</summary>
+        public void Custom(UIElement content) => _items.Children.Add(content);
+
         public void Separator() =>
             _items.Children.Add(new Border { Height = 1, Background = Hex("#1AFFFFFF"), Margin = new Thickness(8, 5, 8, 5) });
 

@@ -39,6 +39,13 @@ namespace IslandPlayer
                     AutoPlay = true,
                 };
                 _player.CommandManager.IsEnabled = true;     // pauza / następny / przewijanie z wyspy i klawiszy
+                _player.MediaOpened += (s, e) =>
+                {
+                    // po przeładowaniu (włączenie korektora) wracamy w to samo miejsce utworu
+                    double seek = _pendingSeek;
+                    _pendingSeek = 0;
+                    if (seek > 0) { try { s.PlaybackSession.Position = TimeSpan.FromSeconds(seek); } catch { } }
+                };
                 _player.MediaFailed += (s, e) =>
                 {
                     Log.Info("player: " + e.Error + " " + e.ErrorMessage);
@@ -58,9 +65,13 @@ namespace IslandPlayer
 
         // ================= pliki z dysku =================
 
+        private static double _pendingSeek;
+        private static int _playCountToken;
+
         public static void PlayTracks(IReadOnlyList<LibraryTrack> tracks, int start, bool shuffle)
         {
             if (tracks == null || tracks.Count == 0) return;
+            lock (_wrapped) _wrapped.Clear();
             HookSession();     // zdarzenia pauza/gra - dla przycisków w oknie
             SaveGain();
             StopLeveler();
@@ -98,6 +109,7 @@ namespace IslandPlayer
                     CurrentTrack = t;
                     NowPlaying = t.Artist + " – " + t.Title;
                     _ = LoadCover(e.NewItem, t);
+                    _ = CountPlay(t, ++_playCountToken);
                 }
                 Changed?.Invoke();
             };
@@ -111,7 +123,20 @@ namespace IslandPlayer
             var deferral = args.GetDeferral();
             try
             {
-                var file = await StorageFile.GetFileFromPathAsync(sender.Token);
+                string path = sender.Token;
+                if (Equalizer.Enabled)
+                {
+                    // z korektorem: plik dekodujemy sami i podajemy jako WAV przepuszczony przez korektor
+                    var eq = await Task.Run(() => EqStream.TryOpen(path));
+                    if (eq != null)
+                    {
+                        lock (_wrapped) _wrapped.Add(path);
+                        args.SetStream(System.IO.WindowsRuntimeStreamExtensions.AsRandomAccessStream(eq), "audio/wav");
+                        return;
+                    }
+                }
+                lock (_wrapped) _wrapped.Remove(path);
+                var file = await StorageFile.GetFileFromPathAsync(path);
                 args.SetStorageFile(file);
             }
             catch (Exception ex)
@@ -122,6 +147,58 @@ namespace IslandPlayer
             {
                 deferral.Complete();
             }
+        }
+
+        // pliki, które grają przez korektor (reszta - bezpośrednio z dysku)
+        private static readonly HashSet<string> _wrapped = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Korektor włączony/wyłączony. Wyłączenie działa od razu (strumień przestaje filtrować). Włączenie przy utworze
+        /// granym prosto z pliku - przeładowujemy listę i wracamy w to samo miejsce (chwila ciszy).
+        /// </summary>
+        public static void RefreshEqualizer()
+        {
+            var t = CurrentTrack;
+            var list = _list;
+            if (t == null || list == null || _player == null || !Equalizer.Enabled) return;
+            bool wrapped;
+            lock (_wrapped) wrapped = _wrapped.Contains(t.Path);
+            if (wrapped) return;
+            try
+            {
+                var order = new List<LibraryTrack>();
+                int start = 0;
+                foreach (var item in list.Items)
+                {
+                    if (!_tracks.TryGetValue(item, out var x)) continue;
+                    if (ReferenceEquals(item, list.CurrentItem)) start = order.Count;
+                    order.Add(x);
+                }
+                if (order.Count == 0) return;
+                double pos = _player.PlaybackSession.Position.TotalSeconds;
+                bool playing = IsPlaying;
+                PlayTracks(order, start, list.ShuffleEnabled);
+                _pendingSeek = pos;
+                if (!playing) _player.Pause();
+            }
+            catch (Exception ex) { Log.Error(ex); }
+        }
+
+        /// <summary>Utwór liczy się jako odsłuchany po 30 s grania (albo połowie, gdy jest krótszy) - do inteligentnych playlist.</summary>
+        private static async Task CountPlay(LibraryTrack t, int token)
+        {
+            try
+            {
+                double need = t.Duration > 0 ? Math.Min(30, t.Duration * 0.5) : 30, played = 0;
+                while (played < need)
+                {
+                    await Task.Delay(2000);
+                    if (token != _playCountToken || !ReferenceEquals(CurrentTrack, t)) return;
+                    if (IsPlaying) played += 2;
+                }
+                PlayStats.Count(t.Path);
+            }
+            catch (Exception ex) { Log.Info("statystyki: " + ex.Message); }
         }
 
         /// <summary>Okładka z pliku (wbudowana w MP3/FLAC albo folder.jpg) - dla wyspy i Discorda.</summary>

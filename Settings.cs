@@ -119,6 +119,12 @@ namespace IslandPlayer
         public string Language { get; set; } = "auto";
         /// <summary>Wersja, której „Co nowego” użytkownik już widział.</summary>
         public string LastSeenVersion { get; set; } = "";
+        // korektor dźwięku (Moja muzyka)
+        public bool EqEnabled { get; set; }
+        public string EqPreset { get; set; } = "flat";
+        public double[] EqCustom { get; set; } = new double[10];
+        /// <summary>Folder śledzony w tle (np. Pobrane) - nowa muzyka z niego sama trafia do biblioteki. "" = wyłączone.</summary>
+        public string WatchFolder { get; set; } = "";
         public bool AutoUpdate { get; set; } = true;
 
         public static string Folder

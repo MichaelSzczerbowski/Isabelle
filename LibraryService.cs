@@ -32,6 +32,8 @@ namespace IslandPlayer
         public string Album { get; set; } = "";
         public double Duration { get; set; }
         public long Modified { get; set; }
+        /// <summary>Kiedy plik trafił do biblioteki (UTC, ticks) - do „Ostatnio dodane”.</summary>
+        public long Added { get; set; }
         /// <summary>Plik z okładką (w folderze Isabelle); null = jeszcze nie szukano, "" = brak.</summary>
         public string CoverPath { get; set; }
         /// <summary>Plik miał własne tagi (tytuł) - wtedy nie poprawiamy nazw.</summary>
@@ -73,6 +75,7 @@ namespace IslandPlayer
                 Directory.CreateDirectory(lib);
                 App.Config.LibraryFolder = lib;
                 App.Config.Save();
+                StartWatching();
             }
             var list = paths.ToList();
             int added = await Task.Run(() =>
@@ -139,6 +142,7 @@ namespace IslandPlayer
         public static async Task ScanAsync(string folder)
         {
             if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) return;
+            if (Tracks.Count == 0) LoadCache();      // skan z tła (śledzenie folderu) zanim ktoś otworzył okno
             _cts?.Cancel();
             var cts = _cts = new CancellationTokenSource();
             Scanning = true;
@@ -157,9 +161,15 @@ namespace IslandPlayer
                 foreach (var f in files)
                 {
                     long mod = File.GetLastWriteTimeUtc(f).Ticks;
-                    if (old.TryGetValue(f, out var known) && known.Modified == mod) { list.Add(known); continue; }
+                    if (old.TryGetValue(f, out var known) && known.Modified == mod)
+                    {
+                        if (known.Added == 0) known.Added = AddedTime(f);
+                        list.Add(known);
+                        continue;
+                    }
                     var t = FromFileName(f);
                     t.Modified = mod;
+                    t.Added = known != null && known.Added != 0 ? known.Added : AddedTime(f);
                     list.Add(t);
                     todo.Add(t);
                 }
@@ -195,6 +205,109 @@ namespace IslandPlayer
                 if (ReferenceEquals(cts, _cts)) Scanning = false;
                 Changed?.Invoke();
             }
+        }
+
+        /// <summary>Data trafienia do folderu: data utworzenia pliku (kopia dostaje datę skopiowania).</summary>
+        private static long AddedTime(string f)
+        {
+            try { return File.GetCreationTimeUtc(f).Ticks; } catch { return DateTime.UtcNow.Ticks; }
+        }
+
+        // ================= śledzenie folderów =================
+        private static FileSystemWatcher _libWatch, _inboxWatch;
+        private static Timer _rescan;
+        private static readonly HashSet<string> _pendingImport = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Folder biblioteki: nowe / usunięte pliki same pojawiają się na liście.
+        /// Folder śledzony (np. Pobrane): nowa muzyka sama kopiuje się do biblioteki.
+        /// Wołane przy starcie i po zmianie któregoś folderu.
+        /// </summary>
+        public static void StartWatching()
+        {
+            try
+            {
+                _libWatch?.Dispose();
+                _inboxWatch?.Dispose();
+                _libWatch = _inboxWatch = null;
+                string lib = App.Config.LibraryFolder;
+                if (!string.IsNullOrWhiteSpace(lib) && Directory.Exists(lib))
+                {
+                    _libWatch = new FileSystemWatcher(lib)
+                    {
+                        IncludeSubdirectories = true, InternalBufferSize = 64 * 1024,
+                        NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite,
+                    };
+                    FileSystemEventHandler changed = (s, e) => { if (IsMusic(e.FullPath) || !System.IO.Path.HasExtension(e.FullPath)) ScheduleRescan(); };
+                    _libWatch.Created += changed;
+                    _libWatch.Deleted += changed;
+                    _libWatch.Changed += changed;
+                    _libWatch.Renamed += (s, e) => ScheduleRescan();
+                    _libWatch.Error += (s, e) => ScheduleRescan();
+                    _libWatch.EnableRaisingEvents = true;
+                }
+                string inbox = App.Config.WatchFolder;
+                if (!string.IsNullOrWhiteSpace(inbox) && Directory.Exists(inbox) && !SameOrInside(inbox, lib))
+                {
+                    _inboxWatch = new FileSystemWatcher(inbox) { IncludeSubdirectories = false, NotifyFilter = NotifyFilters.FileName | NotifyFilters.Size };
+                    // przeglądarki zapisują najpierw .crdownload / .part, a na końcu zmieniają nazwę na .mp3
+                    _inboxWatch.Created += (s, e) => QueueImport(e.FullPath);
+                    _inboxWatch.Renamed += (s, e) => QueueImport(e.FullPath);
+                    _inboxWatch.EnableRaisingEvents = true;
+                }
+            }
+            catch (Exception ex) { Log.Info("śledzenie folderu: " + ex.Message); }
+        }
+
+        private static bool SameOrInside(string a, string b)
+        {
+            if (string.IsNullOrWhiteSpace(b)) return false;
+            try
+            {
+                string fa = System.IO.Path.GetFullPath(a).TrimEnd('\') + "\", fb = System.IO.Path.GetFullPath(b).TrimEnd('\') + "\";
+                return fa.StartsWith(fb, StringComparison.OrdinalIgnoreCase);
+            }
+            catch { return false; }
+        }
+
+        /// <summary>Kilka zmian naraz (kopiowanie albumu) = jeden skan, 2 s po ostatniej.</summary>
+        private static void ScheduleRescan()
+        {
+            lock (_pendingImport)
+            {
+                _rescan ??= new Timer(state => _ = ScanAsync(App.Config.LibraryFolder), null, Timeout.Infinite, Timeout.Infinite);
+                _rescan.Change(2000, Timeout.Infinite);
+            }
+        }
+
+        private static async void QueueImport(string path)
+        {
+            if (!IsMusic(path)) return;
+            lock (_pendingImport) { if (!_pendingImport.Add(path)) return; }
+            try
+            {
+                // czekamy, aż plik się dopisze (pobieranie / kopiowanie) - najwyżej 3 minuty
+                long lastSize = -1;
+                for (int i = 0; i < 180; i++)
+                {
+                    await Task.Delay(1000);
+                    if (!File.Exists(path)) return;
+                    long size = new FileInfo(path).Length;
+                    if (size > 0 && size == lastSize && CanOpen(path)) break;
+                    lastSize = size;
+                }
+                if (!File.Exists(path)) return;
+                int n = await ImportAsync(new[] { path });
+                if (n > 0) Log.Info("śledzenie folderu: dodano " + path);
+            }
+            catch (Exception ex) { Log.Info("śledzenie folderu: " + ex.Message); }
+            finally { lock (_pendingImport) _pendingImport.Remove(path); }
+        }
+
+        private static bool CanOpen(string path)
+        {
+            try { using (File.Open(path, FileMode.Open, FileAccess.Read, FileShare.None)) return true; }
+            catch { return false; }
         }
 
         private static void Sort(List<LibraryTrack> list) =>

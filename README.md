@@ -17,6 +17,10 @@ A tiny black pill at the top of your screen that shows what's playing and grows 
 | 💿 | **My music** — built-in player for your own MP3/FLAC files, with covers and lyrics found automatically (`Ctrl+Alt+L`) | **Moja muzyka** — wbudowany odtwarzacz własnych plików MP3/FLAC, okładki i teksty pobierane automatycznie |
 | ❤️ | Liked songs and your own playlists | Polubione utwory i własne playlisty |
 | 📻 | **Internet radio** — thousands of stations, top/most-listened tabs, signal & quality estimate, station logos in the island | **Radio internetowe** — tysiące stacji, zakładki z najlepszymi, szacowana jakość sygnału, logo stacji w wyspie |
+| 🔎 | **Quick search** (`Ctrl+Alt+Space`) — type a song, artist, playlist or radio station and press Enter | **Szybkie wyszukiwanie** (`Ctrl+Alt+Spacja`) — wpisz utwór, wykonawcę, playlistę albo stację i wciśnij Enter |
+| 🎚️ | 10-band equalizer with presets for My music | 10-pasmowy korektor z gotowymi ustawieniami dla Mojej muzyki |
+| ✨ | Smart playlists: most played, recently added, not played lately | Inteligentne playlisty: najczęściej grane, ostatnio dodane, dawno niesłuchane |
+| 📂 | Watch a folder (e.g. Downloads) — new music joins your library automatically | Śledzenie folderu (np. Pobrane) — nowa muzyka sama trafia do biblioteki |
 | 🐞 | Report a bug straight from the app, "What's new" screen after each update | Zgłaszanie błędów z aplikacji, ekran „Co nowego” po aktualizacji |
 | 🖼️ | Real album art (Spotify logo bar removed automatically) | Prawdziwe okładki (pasek z logo Spotify wycinany automatycznie) |
 | 🌈 | Animated blurred album background and glow in the cover's color, like Apple Music | Ruchome, rozmyte tło z okładki i poświata w jej kolorze |

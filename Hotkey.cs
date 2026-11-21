@@ -18,6 +18,7 @@ namespace IslandPlayer
             (6, "voldown", "Ciszej", "Volume down", "Ctrl+Alt+Down"),
             (7, "fullscreen", "Tryb pełnoekranowy", "Full screen mode", "Ctrl+Alt+F"),
             (8, "library", "Moja muzyka i radio", "My music and radio", "Ctrl+Alt+L"),
+            (9, "search", "Szybkie wyszukiwanie", "Quick search", "Ctrl+Alt+Space"),
         };
 
         public static string Default(string key)
