@@ -60,6 +60,7 @@ namespace IslandPlayer
             if (c == null) return;
             double[] g = null;
             if (c.EqPreset == "custom") g = c.EqCustom;
+            else if (PresetKey.StartsWith(UserPrefix)) g = FindUser(PresetKey.Substring(UserPrefix.Length))?.Gains ?? c.EqCustom;
             else foreach (var p in Presets) if (p.key == PresetKey) g = p.gains;
             Apply(g);
         }
@@ -72,8 +73,66 @@ namespace IslandPlayer
             LocalPlayer.RefreshEqualizer();
         }
 
+        // ================= własne ustawienia =================
+        public const string UserPrefix = "user:";
+
+        public static List<EqUserPreset> UserPresets => App.Config.EqUserPresets ??= new List<EqUserPreset>();
+
+        private static EqUserPreset FindUser(string name) =>
+            UserPresets.Find(p => string.Equals(p.Name, name, StringComparison.CurrentCultureIgnoreCase));
+
+        /// <summary>Zapisuje obecne suwaki pod nazwą (ta sama nazwa = nadpisanie).</summary>
+        public static void SaveUserPreset(string name)
+        {
+            name = (name ?? "").Trim();
+            if (name.Length == 0) return;
+            if (name.Length > 30) name = name.Substring(0, 30);
+            var p = FindUser(name);
+            if (p == null) UserPresets.Add(p = new EqUserPreset { Name = name });
+            p.Gains = Gains;
+            App.Config.EqPreset = UserPrefix + p.Name;
+            App.Config.EqCustom = Gains;
+            App.Config.Save();
+            Bump();
+        }
+
+        public static void RenameUserPreset(string oldName, string newName)
+        {
+            newName = (newName ?? "").Trim();
+            var p = FindUser(oldName);
+            if (p == null || newName.Length == 0) return;
+            if (newName.Length > 30) newName = newName.Substring(0, 30);
+            var clash = FindUser(newName);
+            if (clash != null && !ReferenceEquals(clash, p)) UserPresets.Remove(clash);
+            p.Name = newName;
+            if (PresetKey == UserPrefix + oldName) App.Config.EqPreset = UserPrefix + newName;
+            App.Config.Save();
+            Bump();
+        }
+
+        public static void DeleteUserPreset(string name)
+        {
+            var p = FindUser(name);
+            if (p == null) return;
+            UserPresets.Remove(p);
+            // usunięte ustawienie, które było włączone - dźwięk zostaje taki sam, tylko jako „własne”
+            if (string.Equals(PresetKey, UserPrefix + name, StringComparison.CurrentCultureIgnoreCase)) App.Config.EqPreset = "custom";
+            App.Config.Save();
+            Bump();
+        }
+
         public static void SetPreset(string key)
         {
+            if (key != null && key.StartsWith(UserPrefix))
+            {
+                var u = FindUser(key.Substring(UserPrefix.Length));
+                if (u == null) return;
+                App.Config.EqPreset = UserPrefix + u.Name;
+                App.Config.EqCustom = (double[])(u.Gains ?? new double[10]).Clone();
+                App.Config.Save();
+                Apply(u.Gains);
+                return;
+            }
             foreach (var p in Presets)
             {
                 if (p.key != key) continue;

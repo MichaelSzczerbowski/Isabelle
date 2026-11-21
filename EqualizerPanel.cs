@@ -14,7 +14,9 @@ namespace IslandPlayer
     {
         private const double SliderH = 132, Thumb = 14;
 
-        public static FrameworkElement Build(Brush accent)
+        /// <param name="owner">okno dla okienka z nazwą (panel siedzi w wyskakującym menu)</param>
+        /// <param name="reopen">otwiera panel ponownie (menu zamyka się, gdy pokazujemy okienko z nazwą)</param>
+        public static FrameworkElement Build(Brush accent, Window owner = null, Action reopen = null)
         {
             var root = new StackPanel { Width = 440, Margin = new Thickness(10, 8, 10, 10) };
 
@@ -34,8 +36,16 @@ namespace IslandPlayer
             // ---- gotowe ustawienia ----
             var chips = new WrapPanel { Margin = new Thickness(0, 12, 0, 6) };
             root.Children.Add(chips);
-            var custom = new TextBlock { FontSize = 11.5, Foreground = Hex("#80FFFFFF"), Margin = new Thickness(2, 0, 0, 4), Text = L.T("Własne ustawienie", "Custom") };
-            root.Children.Add(custom);
+            // pod gotowcami: „Własne ustawienie · Zapisz jako…” albo przy własnym gotowcu „Zmień nazwę · Usuń”
+            var actions = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(2, 0, 0, 4) };
+            root.Children.Add(actions);
+
+            string AskName(string title, string initial, string ok)
+            {
+                string n = InputDialog.Ask(owner ?? Application.Current?.MainWindow, title, initial, ok);
+                reopen?.Invoke();
+                return n;
+            }
 
             // ---- suwaki ----
             var bands = new Grid { Margin = new Thickness(0, 6, 0, 0) };
@@ -67,11 +77,40 @@ namespace IslandPlayer
                     string k = p.key;
                     chips.Children.Add(Chip(L.T(p.pl, p.en), k == key, accent, () => Equalizer.SetPreset(k)));
                 }
-                custom.Visibility = key == "custom" ? Visibility.Visible : Visibility.Collapsed;
+                // własne gotowce - z gwiazdką, żeby odróżniały się od wbudowanych
+                foreach (var u in Equalizer.UserPresets)
+                {
+                    string k = Equalizer.UserPrefix + u.Name;
+                    chips.Children.Add(Chip("★ " + u.Name, string.Equals(k, key, StringComparison.CurrentCultureIgnoreCase), accent, () => Equalizer.SetPreset(k)));
+                }
+
+                actions.Children.Clear();
+                if (key == "custom")
+                {
+                    actions.Children.Add(new TextBlock { Text = L.T("Własne ustawienie", "Custom"), FontSize = 11.5, Foreground = Hex("#80FFFFFF"), VerticalAlignment = VerticalAlignment.Center });
+                    actions.Children.Add(Dot());
+                    actions.Children.Add(Link(L.T("Zapisz jako…", "Save as…"), accent, () =>
+                    {
+                        string n = AskName(L.T("Nazwa ustawienia korektora", "Equalizer preset name"), "", L.T("Zapisz", "Save"));
+                        if (!string.IsNullOrWhiteSpace(n)) Equalizer.SaveUserPreset(n);
+                    }));
+                }
+                else if (key.StartsWith(Equalizer.UserPrefix))
+                {
+                    string name = key.Substring(Equalizer.UserPrefix.Length);
+                    actions.Children.Add(Link(L.T("Zmień nazwę", "Rename"), Hex("#B3FFFFFF"), () =>
+                    {
+                        string n = AskName(L.T("Zmień nazwę ustawienia", "Rename preset"), name, L.T("Zapisz", "Save"));
+                        if (!string.IsNullOrWhiteSpace(n)) Equalizer.RenameUserPreset(name, n);
+                    }));
+                    actions.Children.Add(Dot());
+                    actions.Children.Add(Link(L.T("Usuń", "Delete"), Hex("#FF6961"), () => Equalizer.DeleteUserPreset(name)));
+                }
+                actions.Visibility = actions.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
                 foreach (var r in sliders) r();
                 bool on = Equalizer.Enabled;
-                bandsHost.Opacity = chips.Opacity = on ? 1 : 0.4;
-                bandsHost.IsHitTestVisible = chips.IsHitTestVisible = on;
+                bandsHost.Opacity = chips.Opacity = actions.Opacity = on ? 1 : 0.4;
+                bandsHost.IsHitTestVisible = chips.IsHitTestVisible = actions.IsHitTestVisible = on;
                 toggle.Item2(on);
             }
             Action changed = () => root.Dispatcher.BeginInvoke(new Action(Refresh));
@@ -139,6 +178,20 @@ namespace IslandPlayer
                 Equalizer.SaveCustom();
             };
             return col;
+        }
+
+        private static TextBlock Dot() =>
+            new TextBlock { Text = "·", FontSize = 12, Foreground = Hex("#59FFFFFF"), Margin = new Thickness(7, 0, 7, 0), VerticalAlignment = VerticalAlignment.Center };
+
+        /// <summary>Tekstowy przycisk (bez tła), podkreśla się po najechaniu.</summary>
+        private static TextBlock Link(string text, Brush fg, Action click)
+        {
+            var t = new TextBlock { Text = text, FontSize = 11.5, FontWeight = FontWeights.SemiBold, Foreground = fg, Cursor = Cursors.Hand, VerticalAlignment = VerticalAlignment.Center };
+            t.MouseEnter += (s, e) => t.TextDecorations = TextDecorations.Underline;
+            t.MouseLeave += (s, e) => t.TextDecorations = null;
+            t.MouseLeftButtonDown += (s, e) => e.Handled = true;
+            t.MouseLeftButtonUp += (s, e) => click();
+            return t;
         }
 
         private static Border Chip(string text, bool selected, Brush accent, Action click)

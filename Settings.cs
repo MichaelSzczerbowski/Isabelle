@@ -125,6 +125,8 @@ namespace IslandPlayer
         public bool EqEnabled { get; set; }
         public string EqPreset { get; set; } = "flat";
         public double[] EqCustom { get; set; } = new double[10];
+        /// <summary>Własne zapisane ustawienia korektora.</summary>
+        public List<EqUserPreset> EqUserPresets { get; set; } = new List<EqUserPreset>();
         /// <summary>Folder śledzony w tle (np. Pobrane) - nowa muzyka z niego sama trafia do biblioteki. "" = wyłączone.</summary>
         public string WatchFolder { get; set; } = "";
         public bool AutoUpdate { get; set; } = true;
@@ -178,5 +180,11 @@ namespace IslandPlayer
                 Log.Error(ex);
             }
         }
+    }
+
+    public sealed class EqUserPreset
+    {
+        public string Name { get; set; } = "";
+        public double[] Gains { get; set; } = new double[10];
     }
 }

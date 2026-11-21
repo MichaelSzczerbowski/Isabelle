@@ -236,12 +236,13 @@ namespace IslandPlayer
             watchPill = Pill(L.T("Śledź folder", "Watch folder"), false, () => WatchMenu(watchPill));
             watchPill.ToolTip = L.T("Nowa muzyka z wybranego folderu (np. Pobrane) sama trafi do biblioteki", "New music from a chosen folder (e.g. Downloads) is added to your library automatically");
             buttons.Children.Add(watchPill);
-            eqPill = Pill(L.T("Korektor", "Equalizer"), false, () =>
+            void OpenEq()
             {
                 var menu = new GlassMenu(_accent);
-                menu.Custom(EqualizerPanel.Build(_accent));
+                menu.Custom(EqualizerPanel.Build(_accent, this, () => Dispatcher.BeginInvoke(new Action(OpenEq))));
                 menu.Show(eqPill);
-            });
+            }
+            eqPill = Pill(L.T("Korektor", "Equalizer"), false, OpenEq);
             buttons.Children.Add(eqPill);
             buttons.Children.Add(PlayButton());
             bar.Children.Add(buttons);
