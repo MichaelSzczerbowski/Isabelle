@@ -130,6 +130,7 @@ body.mini main{padding-bottom:calc(176px + env(safe-area-inset-bottom))}
     <div id="lmusic">
       <input class="search" id="lq" placeholder="Filtruj bibliotekę" autocomplete="off">
       <div class="btns"><button class="btn" id="shuf">Losowo</button><span class="sub" id="lcount" style="align-self:center"></span></div>
+      <div class="sub" id="dlstat" style="margin:-4px 0 8px;display:none"></div>
       <div id="llist"></div>
     </div>
     <div id="lradio" style="display:none"><div class="chips" id="rcats"></div><div id="rlist"></div></div>
@@ -347,8 +348,18 @@ function playOnPhone(item, list, index) {
   if (list) { queue = list; qi = index; } else { queue = [item]; qi = 0; }
   startCur();
 }
-function startCur() {
+async function startCur() {
   cur = queue[qi]; if (!cur) return;
+  const me = cur;
+  if (cur.id && have.has(cur.id)) {
+    const loc = await localUrls(cur.id);
+    if (me !== cur) return;
+    if (loc.s) { cur.src = loc.s; if (loc.a) cur.art = loc.a; }
+  } else if (pcDown && cur.id) {
+    toast(T('Ten utwór nie jest jeszcze pobrany na telefon', "This song isn't on your phone yet"));
+    if (qi + 1 < queue.length) { qi++; return startCur(); }
+    return;
+  }
   au.src = cur.src;
   const saved = cur.podKey ? +localStorage.getItem('pos:' + cur.podKey) || 0 : 0;
   au.onloadedmetadata = () => { if (saved > 5 && saved < au.duration - 30) au.currentTime = saved; };
@@ -384,10 +395,15 @@ function renderPhone() {
 // ---------- biblioteka ----------
 let lib = null;
 async function loadLib() {
-  if (lib) return renderLib();
+  if (lib && !(libOffline && !pcDown)) return renderLib();
   $('llist').innerHTML = '<div class="empty">' + T('Wczytuję…', 'Loading…') + '</div>';
-  try { lib = await api('/api/library'); renderLib(); }
-  catch (e) { $('llist').innerHTML = '<div class="empty">' + T('Brak połączenia z komputerem', "Can't reach your PC") + '</div>'; }
+  try { lib = await api('/api/library'); libOffline = false; try { localStorage.setItem('libCache', JSON.stringify(lib)); } catch (e) { } renderLib(); syncDownloads(); }
+  catch (e) {
+    let c = []; try { c = JSON.parse(localStorage.getItem('libCache') || '[]'); } catch (x) { }
+    c = c.filter(t => have.has(t.id));
+    if (c.length) { lib = c; libOffline = true; renderLib(); }
+    else $('llist').innerHTML = '<div class="empty">' + T('Brak połączenia z komputerem', "Can't reach your PC") + '</div>';
+  }
 }
 function libItem(t) { return { title: t.title, artist: t.artist, src: U('/api/stream', 'id=' + t.id), art: t.art ? U('/api/art', 'id=' + t.id) : '', id: t.id }; }
 let shown = [];
@@ -400,9 +416,12 @@ function renderLib() {
   $('llist').innerHTML = shown.slice(0, 200).map((t, i) => '<div class="row" data-i="' + i + '"><div class="art"' + (t.art ? ' style="background-image:url(\'' + U('/api/art', 'id=' + t.id) + '\')"' : '') + '>' + (t.art ? '' : '♪') + '</div><div class="x"><div class="t1">' + esc(t.title) + '</div><div class="t2">' + esc(t.artist) + (t.dur ? ' · ' + fmt(t.dur) : '') + '</div></div></div>').join('')
     + (shown.length > 200 ? '<div class="empty">' + T('Wpisz coś, żeby zobaczyć resztę', 'Type to see the rest') + '</div>' : '');
   $('llist').querySelectorAll('.row').forEach(r => r.onclick = () => playLib(+r.dataset.i));
+  if (pcDown) hydrateArt($('llist'), shown.slice(0, 200));
+  dlStatus();
 }
 function playLib(i, shuffle) {
   const t = shown[i];
+  if (mode === 'pc' && pcDown && have.size) setMode('phone');
   if (mode === 'pc') { api('/api/play', 'id=' + t.id + (shuffle ? '&shuffle=1' : '')).then(() => { toast(T('Gra na komputerze', 'Playing on PC')); setTimeout(poll, 300); }).catch(() => toast(T('Brak połączenia', 'No connection'))); }
   else {
     let list = shown.map(libItem);
@@ -586,6 +605,104 @@ async function renderMore() {
       + '</div><div class="sub" style="margin-top:10px">' + T('Działa w tym samym Wi-Fi co komputer z włączoną Isabelle. „Gra w telefonie” odtwarza muzykę z komputera na Twoich słuchawkach.', 'Works on the same Wi-Fi as your PC running Isabelle. “Playing on phone” streams music from your PC to your headphones.') + '</div></div>';
   }
 }
+
+// ---------- muzyka offline: cała biblioteka pobiera się sama do pamięci telefonu ----------
+// (IndexedDB działa też przez zwykłe http w domowym Wi-Fi; gra, dopóki aplikacja jest otwarta)
+let have = new Set(), pcDown = false, libOffline = false, syncing = false, dlNow = '', downFails = 0;
+const dbP = new Promise(res => {
+  try {
+    const r = indexedDB.open('isabelle', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('songs');
+    r.onsuccess = () => res(r.result); r.onerror = () => res(null);
+  } catch (e) { res(null); }
+});
+async function dbDo(mode2, fn) {
+  const db = await dbP; if (!db) throw new Error('no db');
+  return new Promise((res, rej) => {
+    const tx = db.transaction('songs', mode2), st = tx.objectStore('songs'), rq = fn(st);
+    tx.oncomplete = () => res(rq && rq.result); tx.onerror = tx.onabort = () => rej(tx.error);
+  });
+}
+const dbKeys = () => dbDo('readonly', st => st.getAllKeys());
+const dbGet = k => dbDo('readonly', st => st.get(k));
+const dbPut = (k, v) => dbDo('readwrite', st => st.put(v, k));
+const dbDel = k => dbDo('readwrite', st => st.delete(k));
+const urlCache = {};
+async function localUrls(id) {
+  if (urlCache[id]) return urlCache[id];
+  try {
+    const r = await dbGet(id); if (!r) return {};
+    return urlCache[id] = { s: URL.createObjectURL(r.s), a: r.a ? URL.createObjectURL(r.a) : '' };
+  } catch (e) { return {}; }
+}
+async function hydrateArt(box, tracks) {
+  const rows = box.querySelectorAll('.row');
+  for (let i = 0; i < rows.length; i++) {
+    const t = tracks[i]; if (!t || !have.has(t.id)) continue;
+    const u = await localUrls(t.id);
+    if (u.a) { const a = rows[i].querySelector('.art'); a.style.backgroundImage = 'url("' + u.a + '")'; a.textContent = ''; }
+  }
+}
+function dlStatus() {
+  const el = $('dlstat'); if (!el || !lib) return;
+  const all = libOffline ? null : lib.length, n = libOffline ? have.size : lib.filter(t => have.has(t.id)).length;
+  if (libOffline) { el.style.display = ''; el.textContent = T('Bez połączenia – grasz pobrane utwory (', 'Offline – playing downloaded songs (') + n + ')'; return; }
+  if (!all) { el.style.display = 'none'; return; }
+  el.style.display = '';
+  el.textContent = n >= all ? '✓ ' + T('Cała biblioteka jest na telefonie – zagra też bez Wi-Fi', 'Your whole library is on your phone – it plays without Wi-Fi too')
+    : T('Pobieram na telefon: ', 'Downloading to phone: ') + n + ' / ' + all + (dlNow ? ' · ' + dlNow : '');
+}
+async function syncDownloads() {
+  if (syncing || pcDown) return;
+  syncing = true;
+  try {
+    if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => { });
+    const l = await api('/api/library');
+    try { localStorage.setItem('libCache', JSON.stringify(l)); } catch (e) { }
+    const ids = new Set(l.map(t => t.id));
+    for (const k of [...have]) if (!ids.has(k)) { await dbDel(k).catch(() => { }); have.delete(k); }   // usunięte z biblioteki na komputerze
+    for (const t of l) {
+      if (have.has(t.id)) continue;
+      if (pcDown) break;
+      dlNow = t.title; dlStatus();
+      try {
+        const r = await fetch(U('/api/stream', 'id=' + t.id)); if (!r.ok) continue;
+        const sb = await r.blob();
+        let ab = null;
+        if (t.art) { try { const ra = await fetch(U('/api/art', 'id=' + t.id)); if (ra.ok) ab = await ra.blob(); } catch (e) { } }
+        await dbPut(t.id, { s: sb, a: ab, title: t.title });
+        have.add(t.id);
+      } catch (e) {
+        if (e && (e.name === 'QuotaExceededError' || /quota/i.test(e.message || ''))) { toast(T('Brak miejsca na telefonie – pobrano tyle, ile się zmieściło', 'Phone storage full – downloaded as much as fits')); break; }
+        if (!navigator.onLine) break;
+      }
+    }
+  } catch (e) { }
+  dlNow = ''; syncing = false; dlStatus();
+}
+// czy komputer jest osiągalny - niezależnie od trybu
+async function heartbeat() {
+  let ok = false;
+  try { const c = new AbortController(), tm = setTimeout(() => c.abort(), 4000); const r = await fetch(U('/api/now'), { signal: c.signal }); clearTimeout(tm); ok = r.ok; } catch (e) { }
+  if (ok) {
+    downFails = 0;
+    if (pcDown) { pcDown = false; $('offline').style.display = 'none'; if (libOffline) { lib = null; if (document.querySelector('.tab[data-p=lib]').classList.contains('on') && libView === 'music') loadLib(); } }
+    syncDownloads();
+  } else if (++downFails >= 2 && !pcDown) {
+    pcDown = true;
+    if (mode === 'pc' && have.size) { setMode('phone'); toast(T('Brak połączenia z komputerem – grasz muzykę z telefonu', 'No connection to your PC – playing music from your phone')); }
+    if (document.querySelector('.tab[data-p=lib]').classList.contains('on') && libView === 'music') { lib = null; loadLib(); }
+  }
+}
+// gdy Wi-Fi zniknie w trakcie utworu strumieniowanego z komputera - przełącz na kopię w telefonie
+au.addEventListener('error', async () => {
+  if (mode !== 'phone' || !cur || !cur.id || !have.has(cur.id) || (cur.src || '').startsWith('blob:')) return;
+  const t = au.currentTime, loc = await localUrls(cur.id);
+  if (loc.s) { cur.src = loc.s; au.src = loc.s; au.onloadedmetadata = () => { au.currentTime = t; }; au.play().catch(() => { }); }
+});
+dbKeys().then(k => { have = new Set(k || []); dlStatus(); }).catch(() => { });
+setInterval(heartbeat, 15000);
+setTimeout(heartbeat, 1500);
 
 setMode(mode);
 setInterval(poll, 1000);
