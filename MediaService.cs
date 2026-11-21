@@ -223,6 +223,8 @@ namespace IslandPlayer
 
         private async Task MaybeFetchCoverAsync(GlobalSystemMediaTransportControlsSessionMediaProperties props, string key, string appId)
         {
+            // Moja muzyka: okładkę bierzemy prosto z pliku biblioteki (bez czekania, aż Windows ją przekaże)
+            if (await TryOwnCoverAsync(key, appId)) return;
             if (_curCrcKey != null && key != _curCrcKey)
             {
                 _prevCrc = _curCrc;
@@ -271,6 +273,41 @@ namespace IslandPlayer
             {
                 st.Got = true;
                 CoverReady?.Invoke(key, bmp, accent);
+            }
+        }
+
+        /// <summary>
+        /// Utwór z Mojej muzyki: okładka z pliku (wbudowana albo znaleziona w internecie). True = obsłużone
+        /// (okładka jest albo jeszcze jej szukamy). False = to nie nasz utwór albo nie ma okładki - zwykła droga przez Windows.
+        /// </summary>
+        private async Task<bool> TryOwnCoverAsync(string key, string appId)
+        {
+            if ((appId ?? "").IndexOf("Isabelle", StringComparison.OrdinalIgnoreCase) < 0) return false;
+            var t = LocalPlayer.CurrentTrack;
+            if (t == null || LocalPlayer.CurrentStation != null) return false;
+            if (t.CoverPath == "") return false;                       // szukaliśmy - nie ma
+            if (t.CoverPath == null) return true;                      // jeszcze szukamy - spróbujemy przy następnym odczycie
+            if (!File.Exists(t.CoverPath)) return false;
+            if (_covers.TryGetValue(key, out var st) && st.Got) return true;
+            if (_covers.Count > 80) _covers.Clear();
+            st = new CoverState { Start = DateTime.UtcNow, Tries = CoverSchedule.Length };
+            _covers[key] = st;
+            try
+            {
+                byte[] data = await File.ReadAllBytesAsync(t.CoverPath);
+                var (bmp, accent) = ImageUtil.ProcessCover(data, appId);
+                if (bmp == null) return false;
+                st.Got = true;
+                st.Crc = ImageUtil.Hash(data);
+                _curCrc = st.Crc;
+                _curCrcKey = key;
+                CoverReady?.Invoke(key, bmp, accent);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.Info("okładka z biblioteki: " + ex.Message);
+                return false;
             }
         }
 

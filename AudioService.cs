@@ -221,7 +221,7 @@ namespace IslandPlayer
             {
                 try
                 {
-                    if (OwnPlayer) return (float)LocalPlayer.UserVolume;
+                    if (OwnPlayer) { EnsureOwnSessionsFull(); return (float)LocalPlayer.UserVolume; }
                     if (UseApp)
                     {
                         var ss = AppSessions();
@@ -261,6 +261,38 @@ namespace IslandPlayer
                 }
                 catch { }
             }
+        }
+
+        private DateTime _ownFixAt = DateTime.MinValue;
+
+        /// <summary>
+        /// Głośność naszego odtwarzacza ustawiamy teraz w nim samym - sesja Isabelle w mikserze Windows ma stać na 100%,
+        /// inaczej stara, ściszona tam wartość (z czasów, gdy wyspa zmieniała mikser) dalej by ściszała muzykę.
+        /// </summary>
+        private void EnsureOwnSessionsFull()
+        {
+            var now = DateTime.UtcNow;
+            if ((now - _ownFixAt).TotalSeconds < 3 || _default == null) return;
+            _ownFixAt = now;
+            try
+            {
+                int pid = Environment.ProcessId;
+                var mgr = _default.AudioSessionManager;
+                mgr.RefreshSessions();
+                var all = mgr.Sessions;
+                for (int i = 0; i < all.Count; i++)
+                {
+                    using var s = all[i];
+                    try
+                    {
+                        if ((int)s.GetProcessID != pid) continue;
+                        if (s.SimpleAudioVolume.Volume < 0.999f) s.SimpleAudioVolume.Volume = 1f;
+                        if (s.SimpleAudioVolume.Mute) s.SimpleAudioVolume.Mute = false;
+                    }
+                    catch { }
+                }
+            }
+            catch (Exception ex) { Log.Info("głośność Isabelle: " + ex.Message); }
         }
 
         /// <summary>Trwa płynna pauza / wznowienie (wtedy nikt inny nie rusza głośności).</summary>

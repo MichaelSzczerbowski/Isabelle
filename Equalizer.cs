@@ -425,7 +425,7 @@ namespace IslandPlayer
                 for (int c = 0; c < _ch; c++) _filters[c * bands + b].Set(kind, _rate, Equalizer.Bands[b], 1.1, g[b]);
             }
             // ściszenie o część podbicia - podbite pasma nie przesterowują
-            _pre = Math.Pow(10, -maxBoost * 0.75 / 20);
+            _pre = Math.Pow(10, -maxBoost * 0.5 / 20);
         }
 
         public override void Flush() { }

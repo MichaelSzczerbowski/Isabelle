@@ -71,25 +71,13 @@ namespace IslandPlayer
             _accent = new SolidColorBrush(App.Island?.AccentColor ?? Color.FromRgb(255, 92, 160));
             WindowStartupLocation = WindowStartupLocation.Manual;
 
-            // wyspa „rośnie w dół”: czarna pigułka startuje dokładnie w miejscu wyspy i przykrywa ją
-            bool fromIsland = false;
+            // na środku ekranu z kursorem (lekko powyżej środka, bo lista rośnie w dół)
             var isl = App.Island;
-            if (isl != null && isl.IsVisible && (App.Config.Edge ?? "top") == "top")
-            {
-                double sc = isl.RootScale.ScaleX;
-                Left = isl.Left + isl.Root.Width * sc / 2 - Width / 2;
-                Top = isl.Top + 8 * sc;
-                fromIsland = true;
-            }
-            else
-            {
-                // wyspa z boku / na dole - na środku górnej części ekranu z kursorem
-                var area = System.Windows.Forms.Screen.FromPoint(System.Windows.Forms.Cursor.Position).WorkingArea;
-                var src = isl != null ? PresentationSource.FromVisual(isl) : null;
-                double sx = src?.CompositionTarget?.TransformFromDevice.M11 ?? 1, sy = src?.CompositionTarget?.TransformFromDevice.M22 ?? 1;
-                Left = (area.Left + area.Width / 2.0) * sx - Width / 2;
-                Top = (area.Top + area.Height * 0.18) * sy;
-            }
+            var area = System.Windows.Forms.Screen.FromPoint(System.Windows.Forms.Cursor.Position).WorkingArea;
+            var src = isl != null ? PresentationSource.FromVisual(isl) : null;
+            double sx = src?.CompositionTarget?.TransformFromDevice.M11 ?? 1, sy = src?.CompositionTarget?.TransformFromDevice.M22 ?? 1;
+            Left = (area.Left + area.Width / 2.0) * sx - Width / 2;
+            Top = (area.Top + area.Height * 0.36) * sy;
 
             var card = new Border
             {
@@ -139,14 +127,14 @@ namespace IslandPlayer
             PreviewKeyDown += OnKey;
             Deactivated += (s, e) => SafeClose();
 
-            // wejście: pigułka rozciąga się w dół z miejsca wyspy (albo lekko pojawia się na środku ekranu)
-            card.RenderTransformOrigin = new Point(0.5, 0);
-            var scale = new ScaleTransform(fromIsland ? 0.45 : 0.97, fromIsland ? 0.25 : 0.97);
+            // wejście: pigułka lekko „wyskakuje” na środku ekranu
+            card.RenderTransformOrigin = new Point(0.5, 0.5);
+            var scale = new ScaleTransform(0.94, 0.94);
             card.RenderTransform = scale;
             card.Opacity = 0;
             Loaded += (s, e) =>
             {
-                var d = TimeSpan.FromMilliseconds(fromIsland ? 300 : 160);
+                var d = TimeSpan.FromMilliseconds(220);
                 var back = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.25 };
                 card.BeginAnimation(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(120)));
                 scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(1, d) { EasingFunction = back });
