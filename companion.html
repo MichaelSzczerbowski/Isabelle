@@ -66,6 +66,14 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
 .x{flex:1;min-width:0}
 .t1{font-size:15px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .t2{font-size:13px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 8px;margin:0 -18px;padding-left:18px;padding-right:18px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chips button{flex:none;border:0;border-radius:16px;padding:8px 14px;font-size:13px;font-weight:650;background:var(--tcard);color:#fff;white-space:nowrap}
+.chips button.on{background:#fff;color:#000}
+.row .star{margin-left:auto;flex:none;background:none;border:0;color:#ffffff59;width:40px;height:40px;display:flex;align-items:center;justify-content:center}
+.row .star.on{color:#fff}
+.row .star svg{width:22px;height:22px}
+.art.round{border-radius:50%;background-size:cover}
 .row.cur .t1{color:var(--ac);font-weight:700}
 .btn{border:0;border-radius:20px;background:var(--ac);color:#000;font-weight:700;font-size:15px;padding:12px 18px}
 .btn.ghost{background:var(--card);color:#fff}
@@ -117,10 +125,15 @@ body.mini main{padding-bottom:calc(176px + env(safe-area-inset-bottom))}
 
   <!-- ======= BIBLIOTEKA ======= -->
   <section class="page" id="p-lib">
-    <h1>Moja muzyka</h1>
-    <input class="search" id="lq" placeholder="Filtruj bibliotekę" autocomplete="off">
-    <div class="btns"><button class="btn" id="shuf">Losowo</button><span class="sub" id="lcount" style="align-self:center"></span></div>
-    <div id="llist"></div>
+    <h1>Biblioteka</h1>
+    <div class="seg" id="lseg"><button data-v="music" class="on">Muzyka</button><button data-v="radio">Radio</button><button data-v="pods">Podcasty</button></div>
+    <div id="lmusic">
+      <input class="search" id="lq" placeholder="Filtruj bibliotekę" autocomplete="off">
+      <div class="btns"><button class="btn" id="shuf">Losowo</button><span class="sub" id="lcount" style="align-self:center"></span></div>
+      <div id="llist"></div>
+    </div>
+    <div id="lradio" style="display:none"><div class="chips" id="rcats"></div><div id="rlist"></div></div>
+    <div id="lpods" style="display:none"></div>
   </section>
 
   <!-- ======= SZUKAJ ======= -->
@@ -169,7 +182,7 @@ if (EN) {
   document.querySelector('#mode [data-m=pc]').textContent = 'Playing on PC';
   document.querySelector('#mode [data-m=phone]').textContent = 'Playing on phone';
   $('offline').textContent = "Can't reach your PC – is Isabelle running and the phone on the same Wi-Fi?";
-  document.querySelector('#p-lib h1').textContent = 'My music'; $('lq').placeholder = 'Filter library'; $('shuf').textContent = 'Shuffle';
+  document.querySelector('#p-lib h1').textContent = 'Library'; document.querySelector('#lseg [data-v=music]').textContent = 'Music'; document.querySelector('#lseg [data-v=pods]').textContent = 'Podcasts'; $('lq').placeholder = 'Filter library'; $('shuf').textContent = 'Shuffle';
   document.querySelector('#p-search h1').textContent = 'Search'; $('sq').placeholder = 'Song, station, podcast…';
   document.querySelector('#p-more h1').textContent = 'More';
   document.querySelector('#mseg [data-v=party]').textContent = 'Party'; document.querySelector('#mseg [data-v=info]').textContent = 'App';
@@ -181,7 +194,7 @@ if (EN) {
 document.querySelectorAll('.tab').forEach(b => b.onclick = () => {
   document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === b));
   document.querySelectorAll('.page').forEach(p => p.classList.toggle('on', p.id === 'p-' + b.dataset.p));
-  if (b.dataset.p === 'lib') loadLib();
+  if (b.dataset.p === 'lib') { if (libView === 'radio') loadRadio(); else if (libView === 'pods') { if (!$('lpods').querySelector('#sback')) loadPods(); } else loadLib(); }
   if (b.dataset.p === 'more') renderMore();
   if (b.dataset.p === 'search' && !$('sq').value) showSubs();
   updateMini();
@@ -417,7 +430,7 @@ async function search() {
     let h = '';
     if (r.lib && r.lib.length) h += '<h2>' + T('Moja muzyka', 'My music') + '</h2>' + r.lib.map((t, i) => rowHtml(t.art ? U('/api/art', 'id=' + t.id) : '', t.title, t.artist, 'data-k="lib" data-i="' + i + '"')).join('');
     if (r.spot && r.spot.length && mode === 'pc') h += '<h2>Spotify</h2>' + r.spot.map((t, i) => rowHtml(t.art, t.title, t.sub, 'data-k="spot" data-i="' + i + '"')).join('');
-    if (r.radio && r.radio.length) h += '<h2>Radio</h2>' + r.radio.map((t, i) => rowHtml('', t.title, t.sub, 'data-k="radio" data-i="' + i + '"', true)).join('');
+    if (r.radio && r.radio.length) h += '<h2>Radio</h2>' + r.radio.map((t, i) => rowHtml(t.art, t.title, t.sub, 'data-k="radio" data-i="' + i + '"', true)).join('');
     if (r.pods && r.pods.length) h += '<h2>' + T('Podcasty', 'Podcasts') + '</h2>' + r.pods.map((t, i) => rowHtml(t.art, t.title, t.sub, 'data-k="pod" data-i="' + i + '"')).join('');
     $('sres').innerHTML = h || '<div class="empty">' + T('Nic nie znaleziono', 'Nothing found') + '</div>';
     $('sres').querySelectorAll('.row').forEach(el => el.onclick = () => pick(el.dataset.k, +el.dataset.i));
@@ -433,7 +446,7 @@ function pick(kind, i) {
   else if (kind === 'radio') {
     const s = r.radio[i];
     if (mode === 'pc') api('/api/play', 't=' + s.t).then(() => toast(T('Radio gra na komputerze', 'Radio playing on PC')));
-    else playOnPhone({ title: s.title, artist: s.sub, src: s.url, art: '', live: true });
+    else playOnPhone({ title: s.title, artist: s.sub, src: s.url, art: s.art || '', live: true });
   } else if (kind === 'pod') { openShow(r.pods[i].t); return; }
   if (kind !== 'pod') { setTimeout(poll, 400); document.querySelector('.tab[data-p=now]').click(); }
 }
@@ -445,8 +458,10 @@ async function showSubs() {
     $('sres').querySelectorAll('.row').forEach(el => el.onclick = () => openShow(el.dataset.t));
   } catch (e) { }
 }
-async function openShow(t) {
-  $('sres').innerHTML = '<div class="empty">' + T('Wczytuję odcinki…', 'Loading episodes…') + '</div>';
+async function openShow(t, box, onBack) {
+  box = box || $('sres');
+  onBack = onBack || (() => $('sq').value ? search() : showSubs());
+  box.innerHTML = '<div class="empty">' + T('Wczytuję odcinki…', 'Loading episodes…') + '</div>';
   try {
     const d = await api('/api/episodes', 't=' + t);
     let h = '<button class="back" id="sback">‹ ' + T('Wróć', 'Back') + '</button>' + rowHtml(d.show.art, d.show.title, d.show.author, '');
@@ -454,15 +469,81 @@ async function openShow(t) {
       const left = e.done ? '✓ ' : (e.pos > 0 && e.dur ? T('zostało ', '') + fmt(e.dur - e.pos) + T('', ' left') + ' · ' : '');
       return rowHtml(d.show.art, e.title, left + (e.date || '') + (e.dur ? ' · ' + Math.round(e.dur / 60) + ' min' : ''), 'data-i="' + i + '"');
     }).join('');
-    $('sres').innerHTML = h;
-    $('sback').onclick = () => $('sq').value ? search() : showSubs();
-    $('sres').querySelectorAll('.row[data-i]').forEach(el => el.onclick = () => {
+    box.innerHTML = h; window.scrollTo(0, 0);
+    box.querySelector('#sback').onclick = onBack;
+    box.querySelectorAll('.row[data-i]').forEach(el => el.onclick = () => {
       const e = d.eps[+el.dataset.i];
       if (mode === 'pc') api('/api/play', 't=' + e.t).then(() => { toast(T('Podcast gra na komputerze', 'Podcast playing on PC')); setTimeout(poll, 400); });
       else playOnPhone({ title: e.title, artist: d.show.title, src: e.url, art: d.show.art, podKey: e.t + e.url.length });
       document.querySelector('.tab[data-p=now]').click();
     });
-  } catch (e) { $('sres').innerHTML = '<div class="empty">' + T('Nie udało się wczytać odcinków', "Couldn't load episodes") + '</div>'; }
+  } catch (e) { box.innerHTML = '<div class="empty">' + T('Nie udało się wczytać odcinków', "Couldn't load episodes") + '</div>'; }
+}
+
+// ---------- biblioteka: muzyka / radio / podcasty ----------
+let libView = 'music';
+document.querySelectorAll('#lseg button').forEach(b => b.onclick = () => {
+  libView = b.dataset.v;
+  document.querySelectorAll('#lseg button').forEach(x => x.classList.toggle('on', x === b));
+  $('lmusic').style.display = libView === 'music' ? '' : 'none';
+  $('lradio').style.display = libView === 'radio' ? '' : 'none';
+  $('lpods').style.display = libView === 'pods' ? '' : 'none';
+  if (libView === 'radio') loadRadio(); else if (libView === 'pods') loadPods(); else loadLib();
+});
+const STAR = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3.2l2.6 5.5 6 .8-4.4 4.2 1.1 6-5.3-2.9-5.3 2.9 1.1-6L3.4 9.5l6-.8z"/></svg>';
+let radioCat = localStorage.getItem('radioCat') || 'pl-top', radioCats = null, radioData = [];
+async function loadRadio() {
+  try {
+    if (!radioCats) {
+      radioCats = await api('/api/radio');
+      $('rcats').innerHTML = radioCats.map(c => '<button data-c="' + c.key + '">' + esc(c.name) + '</button>').join('');
+      $('rcats').querySelectorAll('button').forEach(b => b.onclick = () => { radioCat = b.dataset.c; localStorage.setItem('radioCat', radioCat); showRadio(); });
+    }
+    showRadio();
+  } catch (e) { $('rlist').innerHTML = '<div class="empty">' + T('Brak połączenia z komputerem', "Can't reach your PC") + '</div>'; }
+}
+async function showRadio() {
+  $('rcats').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.c === radioCat));
+  const on = $('rcats').querySelector('.on'); if (on) on.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+  const want = radioCat;
+  $('rlist').className = ''; $('rlist').innerHTML = '<div class="empty">' + T('Wczytuję stacje…', 'Loading stations…') + '</div>';
+  try {
+    const list = await api('/api/radio', 'c=' + encodeURIComponent(want));
+    if (want !== radioCat) return;
+    radioData = list;
+    if (!list.length) {
+      $('rlist').innerHTML = '<div class="empty">' + (want === 'fav' ? T('Dotknij gwiazdki przy stacji, żeby dodać ją do ulubionych.', 'Tap the star next to a station to add it to favorites.') : want === 'recent' ? T('Tu pojawią się stacje, których słuchasz.', 'Stations you listen to will appear here.') : T('Brak stacji', 'No stations')) + '</div>';
+      return;
+    }
+    $('rlist').className = 'list';
+    $('rlist').innerHTML = list.map((s, i) => '<div class="row" data-i="' + i + '"><div class="art round"' + (s.art ? ' style="background-image:url(\'' + esc(s.art) + '\')"' : '') + '>' + (s.art ? '' : '♪') + '</div><div class="x"><div class="t1">' + esc(s.title) + '</div><div class="t2">' + esc(s.sub || '') + '</div></div><button class="star' + (s.fav ? ' on' : '') + '" aria-label="' + T('Ulubione', 'Favorite') + '">' + STAR + '</button></div>').join('');
+    $('rlist').querySelectorAll('.row').forEach(el => el.onclick = e => {
+      const s = radioData[+el.dataset.i];
+      if (e.target.closest('.star')) {
+        api('/api/radiofav', 't=' + s.t).then(r => { s.fav = r.fav; el.querySelector('.star').classList.toggle('on', r.fav); toast(r.fav ? T('Dodano do ulubionych', 'Added to favorites') : T('Usunięto z ulubionych', 'Removed from favorites')); if (radioCat === 'fav' && !r.fav) showRadio(); });
+        return;
+      }
+      playRadio(s);
+    });
+  } catch (e) { $('rlist').innerHTML = '<div class="empty">' + T('Nie udało się wczytać stacji', "Couldn't load stations") + '</div>'; }
+}
+function playRadio(s) {
+  if (mode === 'pc') api('/api/play', 't=' + s.t).then(() => { toast(T('Radio gra na komputerze', 'Radio playing on PC')); setTimeout(poll, 500); });
+  else playOnPhone({ title: s.title, artist: s.sub, src: s.url, art: s.art || '', live: true });
+  document.querySelector('.tab[data-p=now]').click();
+}
+async function loadPods() {
+  const box = $('lpods');
+  if (!box.innerHTML) box.innerHTML = '<div class="empty">' + T('Wczytuję podcasty…', 'Loading podcasts…') + '</div>';
+  try {
+    const [subs, top] = await Promise.all([api('/api/podcasts'), api('/api/podtop').catch(() => [])]);
+    if (libView !== 'pods') return;
+    let h = '';
+    if (subs.length) h += '<h2>' + T('Subskrybowane', 'Subscribed') + '</h2><div class="list">' + subs.map(p => rowHtml(p.art, p.title, p.author, 'data-t="' + p.t + '"')).join('') + '</div>';
+    if (top.length) h += '<h2>' + T('Popularne w Polsce', 'Popular in Poland') + '</h2><div class="list">' + top.map(p => rowHtml(p.art, p.title, p.author, 'data-t="' + p.t + '"')).join('') + '</div>';
+    box.innerHTML = h || '<div class="empty">' + T('Nie ma jeszcze podcastów – poszukaj ich w zakładce Szukaj.', 'No podcasts yet – find some in Search.') + '</div>';
+    box.querySelectorAll('.row[data-t]').forEach(el => el.onclick = () => openShow(el.dataset.t, box, () => { box.innerHTML = ''; loadPods(); }));
+  } catch (e) { box.innerHTML = '<div class="empty">' + T('Brak połączenia z komputerem', "Can't reach your PC") + '</div>'; }
 }
 
 // ---------- więcej: Wrapped / impreza / aplikacja ----------

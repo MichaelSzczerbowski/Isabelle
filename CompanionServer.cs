@@ -138,6 +138,9 @@ namespace IslandPlayer
                         case "/api/play": await Json(stream, await Ui(() => Play(q))); break;
                         case "/api/episodes": await Json(stream, await EpisodesJson(q)); break;
                         case "/api/podcasts": await Json(stream, Serialize(PodcastService.Subscriptions.Select(s => new { t = Token(s), title = s.Title, author = s.Author, art = s.Art }))); break;
+                        case "/api/radio": await Json(stream, await RadioJson(q)); break;
+                        case "/api/radiofav": await Json(stream, await Ui(() => RadioFav(q))); break;
+                        case "/api/podtop": await Json(stream, await PodTopJson()); break;
                         case "/api/wrapped": await Json(stream, WrappedJson(q.TryGetValue("p", out var p) ? p : "week")); break;
                         case "/api/party": await Json(stream, await Ui(() => PartyJson(q))); break;
                         case "/api/partyqr":
@@ -293,7 +296,7 @@ namespace IslandPlayer
             await Task.WhenAll(radioTask, podTask, spotTask);
 
             var radio = (radioTask.Result ?? new List<RadioStation>()).Where(s => s.LastCheckOk).Take(6)
-                .Select(s => new { t = Token(s), title = s.Name, sub = s.Country ?? "", url = s.Url }).ToList();
+                .Select(s => new { t = Token(s), title = s.Name, sub = s.Country ?? "", url = s.Url, art = s.Favicon ?? "" }).ToList();
             var pods = (podTask.Result ?? new List<PodcastShow>()).Take(6).Select(s => new { t = Token(s), title = s.Title, sub = s.Author, art = s.Art }).ToList();
             var spot = (spotTask.Result ?? new List<SpotifyService.SpotifyTrack>()).Select(s => new { t = Token(s), title = s.Title, sub = s.Artist, art = s.Art }).ToList();
             return Serialize(new { lib, radio, pods, spot });
@@ -374,6 +377,48 @@ namespace IslandPlayer
                 url = PartyServer.Running ? PartyServer.Url : "",
                 guests = PartyServer.Recent(10).Select(r => new { title = r.Title, artist = r.Artist, by = r.By }),
             });
+        }
+
+        // ================= radio i podcasty (zakładka Biblioteka) =================
+        /// <summary>Bez ?c= - lista kategorii; z ?c=klucz - stacje z tej kategorii (z pamięci podręcznej, świeże w tle).</summary>
+        private static async Task<string> RadioJson(Dictionary<string, string> q)
+        {
+            if (!q.TryGetValue("c", out var key) || string.IsNullOrEmpty(key))
+                return Serialize(RadioService.Categories.Select(c => new { key = c.key, name = L.T(c.pl, c.en) }));
+            var cat = RadioService.Categories.FirstOrDefault(c => c.key == key);
+            List<RadioStation> list;
+            if (key == "fav") list = (App.Config.RadioFavorites ?? new List<RadioStation>()).ToList();
+            else if (key == "recent") list = (App.Config.RadioRecent ?? new List<RadioStation>()).ToList();
+            else if (cat.query == null) list = new List<RadioStation>();
+            else
+            {
+                list = RadioService.Cached(cat.query);
+                if (list == null || !RadioService.IsFresh(cat.query))
+                {
+                    try { list = await RadioService.Category(cat.query) ?? list; } catch { }
+                }
+                list ??= new List<RadioStation>();
+            }
+            var stations = list.Where(s => s != null && s.LastCheckOk && !string.IsNullOrEmpty(s.Url)).Take(80).ToList();
+            return Serialize(stations.Select(s => new
+            {
+                t = Token(s), title = s.Name, sub = s.Info, url = s.Url,
+                art = string.IsNullOrEmpty(s.Favicon) ? "" : s.Favicon, fav = LocalPlayer.IsFavorite(s)
+            }));
+        }
+
+        private static string RadioFav(Dictionary<string, string> q)
+        {
+            if (!(Resolve(q.TryGetValue("t", out var t) ? t : null) is RadioStation st)) return "{\"fav\":false}";
+            LocalPlayer.ToggleFavorite(st);
+            return Serialize(new { fav = LocalPlayer.IsFavorite(st) });
+        }
+
+        private static async Task<string> PodTopJson()
+        {
+            List<PodcastShow> top;
+            try { top = await PodcastService.TopAsync(); } catch { top = PodcastService.CachedTop(); }
+            return Serialize((top ?? new List<PodcastShow>()).Take(40).Select(s => new { t = Token(s), title = s.Title, author = s.Author, art = s.Art }));
         }
 
         // ================= pomocnicze =================
