@@ -40,7 +40,14 @@ namespace IslandPlayer
                 };
                 _player.CommandManager.IsEnabled = true;     // pauza / następny / przewijanie z wyspy i klawiszy
                 _player.Volume = UserVolume;
-                _player.MediaEnded += (s, e) => _listEnded = true;      // koniec całej listy (tryb imprezy wraca do poprzedniego odtwarzacza)
+                _player.MediaEnded += (s, e) =>
+                {
+                    _listEnded = true;      // koniec całej listy (tryb imprezy wraca do poprzedniego odtwarzacza)
+                    // autoplay: po końcu playlisty z Mojej muzyki grają podobne piosenki
+                    var last = _lastListTracks;
+                    if (last != null && CurrentEpisode == null && CurrentStation == null && !PlayingPreview)
+                        System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(() => _ = AutoplayService.OnListEndedAsync(last)));
+                };
                 _player.MediaOpened += (s, e) =>
                 {
                     // po przeładowaniu (włączenie korektora) wracamy w to samo miejsce utworu
@@ -115,6 +122,7 @@ namespace IslandPlayer
         }
 
         private static volatile bool _listEnded;
+        private static List<LibraryTrack> _lastListTracks;
 
         /// <summary>Czy lista skończyła się sama od ostatniego sprawdzenia (i kasuje znacznik).</summary>
         public static bool ConsumeListEnded()
@@ -141,6 +149,8 @@ namespace IslandPlayer
             StreamTitle = null;
             _radioItem = null;
             PlayingPreview = false;
+            SavePodcastPosition();
+            CurrentEpisode = null;
             StopCrossfade();
             EnsureCrossfadeWatch();
             var list = new MediaPlaybackList { AutoRepeatEnabled = false, ShuffleEnabled = shuffle, MaxPlayedItemsToKeepOpen = 2 };
@@ -148,6 +158,7 @@ namespace IslandPlayer
             MediaPlaybackItem startItem = null;
             _queueAnchor = null;
             _queuedAhead = 0;
+            _lastListTracks = new List<LibraryTrack>(tracks);
             for (int i = 0; i < tracks.Count; i++)
             {
                 var t = tracks[i];
@@ -486,6 +497,79 @@ namespace IslandPlayer
             if (was && _player != null) { try { _player.Volume = UserVolume; } catch { } }
         }
 
+        // ================= podcasty =================
+        /// <summary>Grany odcinek podcastu (null = nie podcast).</summary>
+        public static PodcastEpisode CurrentEpisode { get; private set; }
+        private static System.Windows.Threading.DispatcherTimer _podTimer;
+
+        public static async void PlayPodcast(PodcastEpisode ep)
+        {
+            if (ep == null || string.IsNullOrWhiteSpace(ep.Url)) return;
+            var ui = System.Windows.Application.Current?.Dispatcher;
+            if (ui != null && !ui.CheckAccess()) { ui.BeginInvoke(new Action(() => PlayPodcast(ep))); return; }
+            try
+            {
+                HookSession();
+                StopCrossfade();
+                SaveGain();
+                StopLeveler();
+                StopLive();
+                SavePodcastPosition();
+                _radioToken++;
+                int token = _radioToken;
+                _icy.Stop();
+                lock (_wrapped) _wrapped.Clear();
+                CurrentStation = null;
+                StreamTitle = null;
+                _radioItem = null;
+                _list = null;
+                _tracks.Clear();
+                CurrentTrack = null;
+                PlayingPreview = false;
+                CurrentEpisode = ep;
+                NowPlaying = ep.Show + " – " + ep.Title;
+                Changed?.Invoke();
+
+                var item = new MediaPlaybackItem(MediaSource.CreateFromUri(new Uri(ep.Url)));
+                var props = item.GetDisplayProperties();
+                props.Type = MediaPlaybackType.Music;
+                props.MusicProperties.Title = ep.Title;
+                props.MusicProperties.Artist = ep.Show;
+                string cover = await DownloadPreviewCover(ep.Art);
+                if (token != _radioToken) return;
+                if (cover != null)
+                {
+                    try { props.Thumbnail = RandomAccessStreamReference.CreateFromFile(await StorageFile.GetFileFromPathAsync(cover)); } catch { }
+                }
+                item.ApplyDisplayProperties(props);
+                // wracamy tam, gdzie ostatnio skończyłeś
+                double pos = PodcastService.IsDone(ep.Key) ? 0 : PodcastService.Position(ep.Key);
+                _pendingSeek = pos > 5 ? pos : 0;
+                Player.Source = item;
+                Player.Volume = UserVolume;
+                Player.Play();
+                if (_podTimer == null)
+                {
+                    _podTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+                    _podTimer.Tick += (s, e) => SavePodcastPosition();
+                    _podTimer.Start();
+                }
+            }
+            catch (Exception ex) { Log.Error(ex); }
+        }
+
+        private static void SavePodcastPosition()
+        {
+            var ep = CurrentEpisode;
+            if (ep == null || _player == null) return;
+            try
+            {
+                var ses = _player.PlaybackSession;
+                PodcastService.SetPosition(ep.Key, ses.Position.TotalSeconds, ses.NaturalDuration.TotalSeconds);
+            }
+            catch { }
+        }
+
         // ================= 30-sekundowe fragmenty (szybkie wyszukiwanie bez Spotify Premium) =================
         private static readonly System.Net.Http.HttpClient PreviewHttp = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(4) };
         /// <summary>Gra fragment piosenki z internetu (nie z biblioteki i nie radio).</summary>
@@ -513,6 +597,8 @@ namespace IslandPlayer
                 _list = null;
                 _tracks.Clear();
                 CurrentTrack = null;
+                SavePodcastPosition();
+                CurrentEpisode = null;
                 PlayingPreview = true;
                 NowPlaying = artist + " – " + title;
                 Changed?.Invoke();
@@ -579,6 +665,8 @@ namespace IslandPlayer
             StopLive();
             _icy.Stop();
             _triedUrls.Add(st.Url);
+            SavePodcastPosition();
+            CurrentEpisode = null;
             CurrentStation = st;
             CurrentTrack = null;
             PlayingPreview = false;
@@ -816,6 +904,7 @@ namespace IslandPlayer
 
         public static bool SkipNext()
         {
+            if (CurrentEpisode != null && _player != null) { _player.PlaybackSession.Position += TimeSpan.FromSeconds(30); return true; }   // podcast: +30 s
             if (_list == null) return false;
             try { _list.MoveNext(); Changed?.Invoke(); return true; } catch { return false; }
         }
@@ -823,6 +912,12 @@ namespace IslandPlayer
         /// <summary>Jak w każdym odtwarzaczu: po 3 s utworu „wstecz” wraca na początek, wcześniej - do poprzedniego.</summary>
         public static bool SkipPrevious()
         {
+            if (CurrentEpisode != null && _player != null)       // podcast: -15 s
+            {
+                var p = _player.PlaybackSession.Position - TimeSpan.FromSeconds(15);
+                _player.PlaybackSession.Position = p < TimeSpan.Zero ? TimeSpan.Zero : p;
+                return true;
+            }
             if (_list == null) return false;
             try
             {
@@ -1035,6 +1130,8 @@ namespace IslandPlayer
 
         public static void Dispose()
         {
+            SavePodcastPosition();
+            try { PodcastService.Flush(); } catch { }
             try { _player?.Dispose(); } catch { }
             _player = null;
         }

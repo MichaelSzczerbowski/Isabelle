@@ -57,7 +57,7 @@ namespace IslandPlayer
         {
             if (_timer != null) return;
             _timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMinutes(30) };
-            _timer.Tick += (s, e) => { _timer.Interval = TimeSpan.FromMinutes(30); _ = CheckIfDue(); };
+            _timer.Tick += (s, e) => { _timer.Interval = TimeSpan.FromMinutes(30); _ = CheckIfDue(); _ = ConcertService.CheckIfDue(); };
             _timer.Interval = TimeSpan.FromMinutes(2);        // pierwsze sprawdzenie chwilę po starcie
             _timer.Start();
         }

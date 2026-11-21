@@ -25,6 +25,10 @@ A tiny black pill at the top of your screen that shows what's playing and grows 
 | 📊 | **Isabelle Wrapped** — your listening stats from every player | **Isabelle Wrapped** — statystyki słuchania ze wszystkich odtwarzaczy |
 | 🆕 | New releases from your most played artists | Nowości od najczęściej słuchanych wykonawców |
 | 🔀 | Crossfade in My music, liquid glass island background | Przenikanie utworów w Mojej muzyce, tło wyspy liquid glass |
+| 🎙️ | **Podcasts** — search, subscribe and resume where you left off | **Podcasty** — wyszukiwanie, subskrypcje i wznawianie od miejsca, w którym skończyłeś |
+| ♾️ | Autoplay similar songs when a playlist ends | Autoplay podobnych piosenek po końcu playlisty |
+| 🎤 | Concerts of your top artists near you (Ticketmaster) | Koncerty najczęściej słuchanych wykonawców w okolicy (Ticketmaster) |
+| 🧹 | Library tidy-up: duplicates, missing tags, messy file names, quality | Porządkowanie biblioteki: duplikaty, brakujące tagi, nazwy plików, jakość |
 | 🐞 | Report a bug straight from the app, "What's new" screen after each update | Zgłaszanie błędów z aplikacji, ekran „Co nowego” po aktualizacji |
 | 🖼️ | Real album art (Spotify logo bar removed automatically) | Prawdziwe okładki (pasek z logo Spotify wycinany automatycznie) |
 | 🌈 | Animated blurred album background and glow in the cover's color, like Apple Music | Ruchome, rozmyte tło z okładki i poświata w jej kolorze |

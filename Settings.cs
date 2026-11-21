@@ -21,6 +21,14 @@ namespace IslandPlayer
         public int Crossfade { get; set; }
         /// <summary>Raz na dobę sprawdzaj nowe wydania najczęściej słuchanych wykonawców.</summary>
         public bool NewReleases { get; set; } = true;
+        /// <summary>Po końcu playlisty w Mojej muzyce graj podobne piosenki.</summary>
+        public bool Autoplay { get; set; } = true;
+        /// <summary>Powiadomienia o koncertach najczęściej słuchanych wykonawców (Ticketmaster).</summary>
+        public bool Concerts { get; set; } = true;
+        public string TicketmasterKey { get; set; } = "";
+        /// <summary>Miasta oddzielone przecinkami ("" = cały kraj).</summary>
+        public string ConcertCities { get; set; } = "";
+        public string ConcertCountry { get; set; } = "PL";
         /// <summary>Rozmyta okładka w tle powoli płynie (jak w Apple Music na Macu).</summary>
         public bool AnimatedBackground { get; set; } = true;
         public bool Glow { get; set; } = true;

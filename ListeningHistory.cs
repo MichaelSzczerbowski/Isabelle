@@ -113,7 +113,7 @@ namespace IslandPlayer
         public static List<(string artist, int count)> TopArtists(DateTime sinceUtc, int count)
         {
             return Since(sinceUtc)
-                .Where(x => x.S != "Radio" && x.A.Length > 0)
+                .Where(x => x.S != "Radio" && x.S != "Podcast" && x.A.Length > 0)
                 .GroupBy(x => MainArtist(x.A), StringComparer.CurrentCultureIgnoreCase)
                 .Select(g => (artist: g.Key, count: g.Count()))
                 .OrderByDescending(x => x.count)
@@ -139,7 +139,7 @@ namespace IslandPlayer
         public static string Source(string appId)
         {
             string a = (appId ?? "").ToLowerInvariant();
-            if (a.Contains("isabelle")) return LocalPlayer.CurrentStation != null ? "Radio" : L.T("Moja muzyka", "My music");
+            if (a.Contains("isabelle")) return LocalPlayer.CurrentStation != null ? "Radio" : LocalPlayer.CurrentEpisode != null ? "Podcast" : L.T("Moja muzyka", "My music");
             if (a.Contains("spotify")) return "Spotify";
             if (a.Contains("chrome") || a.Contains("msedge") || a.Contains("firefox") || a.Contains("opera") || a.Contains("brave") || a.Contains("vivaldi"))
                 return L.T("Przeglądarka", "Browser");

@@ -546,6 +546,19 @@ namespace IslandPlayer
                     "checks once a day whether your most played artists released something – a notification and a list in Isabelle Wrapped"),
                 c.NewReleases, v => c.NewReleases = v);
 
+            // ---- koncerty ----
+            var cg = Group(p, L.T("KONCERTY", "CONCERTS"));
+            Toggle(cg, L.T("Koncerty w okolicy", "Concerts near you"),
+                L.T("raz na dobę sprawdza, czy najczęściej słuchani wykonawcy grają w Twoich miastach – dymek przy zegarze i lista w Isabelle Wrapped",
+                    "checks once a day whether your most played artists play in your cities – a notification and a list in Isabelle Wrapped"),
+                c.Concerts, v => c.Concerts = v);
+            TextRow(cg, L.T("Miasta", "Cities"), L.T("oddzielone przecinkami, np. Kraków, Katowice – puste = cały kraj", "comma separated, e.g. London, Manchester – empty = whole country"),
+                c.ConcertCities, v => c.ConcertCities = v, false);
+            TextRow(cg, L.T("Kraj", "Country"), L.T("kod kraju, np. PL, DE, CZ", "country code, e.g. PL, DE, GB"), c.ConcertCountry, v => c.ConcertCountry = v, false);
+            TextRow(cg, L.T("Klucz Ticketmaster", "Ticketmaster key"),
+                L.T("darmowy: developer.ticketmaster.com → załóż konto → My Apps → skopiuj „Consumer Key” tutaj", "free: developer.ticketmaster.com → sign up → My Apps → copy the “Consumer Key” here"),
+                c.TicketmasterKey, v => c.TicketmasterKey = v, true, "https://developer-acct.ticketmaster.com/user/register");
+
             // ---- Spotify ----
             SpotifyGroup(p);
 
@@ -620,6 +633,8 @@ namespace IslandPlayer
             Segment(g, L.T("Przenikanie utworów", "Crossfade"), L.T("w Mojej muzyce koniec piosenki przechodzi płynnie w następną", "in My music the end of a song blends into the next one"),
                 new[] { ("0", L.T("Wył.", "Off")), ("3", "3 s"), ("6", "6 s"), ("9", "9 s"), ("12", "12 s") },
                 c.Crossfade.ToString(), v => c.Crossfade = int.Parse(v));
+            Toggle(g, L.T("Autoplay podobnych", "Autoplay similar"), L.T("gdy skończy się playlista w Mojej muzyce, grają dalej podobne piosenki", "when a My music playlist ends, similar songs keep playing"),
+                c.Autoplay, v => c.Autoplay = v);
             Toggle(g, L.T("Tylko głośność muzyki", "Music volume only"),
                 L.T("kółko zmienia głośność odtwarzacza (np. Spotify), a nie całego komputera", "the wheel changes the player's volume (e.g. Spotify), not the whole PC"),
                 c.AppVolume, v => c.AppVolume = v);
@@ -911,6 +926,33 @@ namespace IslandPlayer
                 idRow.Children.Add(open);
                 AddRow(g, idRow);
             }
+        }
+
+        /// <summary>Wiersz z polem tekstowym (zapis od razu przy pisaniu) i opcjonalnym linkiem „Otwórz stronę”.</summary>
+        private void TextRow(StackPanel group, string title, string hint, string value, Action<string> changed, bool mono, string link = null)
+        {
+            var c = App.Config;
+            var row = new StackPanel { Margin = new Thickness(18, 10, 16, 14) };
+            row.Children.Add(new TextBlock { Text = title, FontSize = 14, FontWeight = FontWeights.SemiBold });
+            row.Children.Add(new TextBlock { Text = hint, FontSize = 12, Foreground = TextSub, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 8) });
+            var box = new TextBox
+            {
+                Text = value ?? "", FontSize = 13, Foreground = Brushes.White, Background = Hex("#14FFFFFF"), BorderBrush = Hairline,
+                BorderThickness = new Thickness(1), Padding = new Thickness(10, 6, 10, 6), CaretBrush = Brushes.White,
+                FontFamily = mono ? new FontFamily("Cascadia Mono, Consolas") : FontFamily,
+            };
+            box.TextChanged += (s, e) => { changed(box.Text.Trim()); c.Save(); };
+            row.Children.Add(box);
+            if (link != null)
+            {
+                var open = new TextBlock { Text = L.T("Otwórz stronę ↗", "Open the page ↗"), FontSize = 12, Foreground = _accentBrush, Cursor = Cursors.Hand, Margin = new Thickness(0, 8, 0, 0) };
+                open.MouseLeftButtonUp += (s, e) =>
+                {
+                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(link) { UseShellExecute = true }); } catch { }
+                };
+                row.Children.Add(open);
+            }
+            AddRow(group, row);
         }
 
         private static StackPanel Group(StackPanel page, string header)

@@ -340,7 +340,7 @@ namespace IslandPlayer
             return new LibraryTrack { Path = path, Title = title, Artist = artist, ArtistFromFolder = fromFolder };
         }
 
-        private static string CleanName(string name)
+        internal static string CleanName(string name)
         {
             string R(string input, string pattern, string with = " ") =>
                 System.Text.RegularExpressions.Regex.Replace(input, pattern, with, System.Text.RegularExpressions.RegexOptions.IgnoreCase);

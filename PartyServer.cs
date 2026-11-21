@@ -310,6 +310,8 @@ namespace IslandPlayer
 
         // ---- powrót po kolejce imprezy: odtwarzacz przerwany przez gości gra dalej swoje ----
         private static string _resumeApp;        // przerwany odtwarzacz (AppId)
+        /// <summary>Po kolejce gości wznowimy poprzedni odtwarzacz (autoplay wtedy się nie wtrąca).</summary>
+        public static bool HasResume => _resumeApp != null;
         private static string _partyPlayer;      // "own" / "spotify" - gdzie grają piosenki gości
         private static bool _spSeenPlaying;
         private static double _spLastLeft = 999;
@@ -325,7 +327,7 @@ namespace IslandPlayer
             bool ended = false;
             if (_partyPlayer == "own")
             {
-                ended = LocalPlayer.ConsumeListEnded();
+                ended = LocalPlayer.ConsumeListEnded() && !LocalPlayer.IsPlaying;
                 // zapasowo: nasz odtwarzacz stoi na samym końcu ostatniej piosenki
                 if (!ended && !playing && app.Contains("isabelle") && snap.Duration > 0 && snap.Duration - snap.PositionNow(DateTime.UtcNow) <= 2) ended = true;
                 // ktoś ręcznie włączył inny odtwarzacz - nie wtrącamy się

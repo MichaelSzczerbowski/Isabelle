@@ -137,7 +137,7 @@ namespace IslandPlayer
             {
                 // ---- liczby ----
                 double hours = items.Sum(x => x.Sec) / 3600.0;
-                int artists = items.Where(x => x.A.Length > 0 && x.S != "Radio").Select(x => ListeningHistory.MainArtist(x.A).ToLowerInvariant()).Distinct().Count();
+                int artists = items.Where(x => x.A.Length > 0 && x.S != "Radio" && x.S != "Podcast").Select(x => ListeningHistory.MainArtist(x.A).ToLowerInvariant()).Distinct().Count();
                 var stats = new UniformGrid { Columns = 3, Margin = new Thickness(0, 4, 0, 0) };
                 stats.Children.Add(Stat(hours >= 10 ? hours.ToString("0") : hours.ToString("0.0"), L.T("godzin muzyki", "hours of music")));
                 stats.Children.Add(Stat(items.Count.ToString("N0"), L.T("odsłuchań", "plays")));
@@ -154,7 +154,7 @@ namespace IslandPlayer
                 }
 
                 // ---- ulubione utwory ----
-                var tracks = items.Where(x => x.S != "Radio")
+                var tracks = items.Where(x => x.S != "Radio" && x.S != "Podcast")
                     .GroupBy(x => (x.T.ToLowerInvariant(), ListeningHistory.MainArtist(x.A).ToLowerInvariant()))
                     .Select(g => (g.First().T, g.First().A, count: g.Count()))
                     .OrderByDescending(x => x.count).Take(5).ToList();
@@ -185,6 +185,29 @@ namespace IslandPlayer
                 });
             }
 
+            // ---- koncerty ----
+            if (ConcertService.Configured && App.Config.Concerts)
+            {
+                var csp = Section(L.T("Koncerty Twoich artystów", "Your artists live"));
+                var gigs = ConcertService.Upcoming.Take(6).ToList();
+                if (gigs.Count == 0)
+                    csp.Children.Add(new TextBlock
+                    {
+                        Text = ConcertService.LastError ?? L.T("Na razie brak koncertów w wybranych miastach.", "No concerts in your cities yet."),
+                        FontSize = 12.5, Foreground = Hex("#99FFFFFF"), TextWrapping = TextWrapping.Wrap,
+                    });
+                foreach (var c in gigs)
+                {
+                    var row = new StackPanel { Margin = new Thickness(0, 3, 0, 3), Cursor = Cursors.Hand, Background = Brushes.Transparent };
+                    string when = DateTime.TryParse(c.Date, out var d) ? d.ToString("d MMM yyyy", !L.En ? new CultureInfo("pl-PL") : new CultureInfo("en-US")) : c.Date;
+                    row.Children.Add(new TextBlock { Text = c.Artist + " · " + when, FontSize = 14.5, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
+                    row.Children.Add(new TextBlock { Text = c.City + (string.IsNullOrEmpty(c.Venue) ? "" : ", " + c.Venue) + L.T(" · bilety ↗", " · tickets ↗"), FontSize = 12, Foreground = Hex("#99FFFFFF"), TextTrimming = TextTrimming.CharacterEllipsis });
+                    var cc = c;
+                    row.MouseLeftButtonUp += (s, e) => ConcertService.Open(cc);
+                    csp.Children.Add(row);
+                }
+            }
+
             // ---- nowości ----
             var rsp = Section(L.T("Nowości od Twoich artystów", "New from your artists"));
             var recent = NewReleases.Recent.Take(6).ToList();
@@ -202,6 +225,7 @@ namespace IslandPlayer
             {
                 check.Text = L.T("Sprawdzam…", "Checking…");
                 await NewReleases.CheckAsync();
+                await ConcertService.CheckAsync();
                 Render();
             };
             rsp.Children.Add(check);

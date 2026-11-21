@@ -56,6 +56,7 @@ namespace IslandPlayer
             };
             _icon.BalloonTipClicked += (s, e) => _balloonClick?.Invoke();
             NewReleases.Found += r => App.Current?.Dispatcher.BeginInvoke(new Action(() => ShowRelease(r)));
+            ConcertService.Found += c => App.Current?.Dispatcher.BeginInvoke(new Action(() => ShowConcert(c)));
         }
 
         private void RefreshMenu()
@@ -91,6 +92,16 @@ namespace IslandPlayer
             _balloonClick = () => NewReleases.Open(r);
             _icon.ShowBalloonTip(8000, (r.Single ? L.T("Nowy singiel: ", "New single: ") : L.T("Nowy album: ", "New album: ")) + r.Artist,
                 r.Album + L.T(" - kliknij, aby posłuchać", " - click to listen"), WinForms.ToolTipIcon.Info);
+        }
+
+        /// <summary>Dymek „koncert Twojego artysty w okolicy” (kliknięcie = bilety).</summary>
+        public void ShowConcert(Concert c)
+        {
+            if (c == null) return;
+            _balloonClick = () => ConcertService.Open(c);
+            string when = DateTime.TryParse(c.Date, out var d) ? d.ToString("d MMMM", L.En ? new System.Globalization.CultureInfo("en-US") : new System.Globalization.CultureInfo("pl-PL")) : c.Date;
+            _icon.ShowBalloonTip(9000, L.T("Koncert: ", "Concert: ") + c.Artist,
+                when + " · " + c.City + (string.IsNullOrEmpty(c.Venue) ? "" : ", " + c.Venue) + L.T(" - kliknij po bilety", " - click for tickets"), WinForms.ToolTipIcon.Info);
         }
 
         /// <summary>Czarna "wyspa" z zieloną kropką, rysowana w kodzie (bez plików graficznych).</summary>

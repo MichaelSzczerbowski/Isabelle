@@ -102,8 +102,8 @@ namespace IslandPlayer
         private readonly GlassBackground _glass = new GlassBackground();
         private string _glassPath;
         private BitmapSource _glassLogo;
-        private readonly Border _tabMusic, _tabRadio;
-        private readonly Grid _pageMusic = new Grid(), _pageRadio = new Grid();
+        private readonly Border _tabMusic, _tabRadio, _tabPodcasts;
+        private readonly Grid _pageMusic = new Grid(), _pageRadio = new Grid(), _pagePodcasts = new Grid();
         private readonly ListBox _tracksList = MakeList();
         private readonly TextBox _search = MakeBox();
         private readonly TextBlock _folderText = new TextBlock(), _status = new TextBlock();
@@ -160,8 +160,10 @@ namespace IslandPlayer
             var tabs = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 0, 44, 0) };
             _tabMusic = Tab(L.T("Pliki", "Files"), () => ShowTab(0));
             _tabRadio = Tab(L.T("Radio", "Radio"), () => ShowTab(1));
+            _tabPodcasts = Tab(L.T("Podcasty", "Podcasts"), () => ShowTab(2));
             tabs.Children.Add(_tabMusic);
             tabs.Children.Add(_tabRadio);
+            tabs.Children.Add(_tabPodcasts);
             head.Children.Add(tabs);
 
             var close = new Border
@@ -183,6 +185,7 @@ namespace IslandPlayer
             Grid.SetRow(pages, 1);
             pages.Children.Add(_pageMusic);
             pages.Children.Add(_pageRadio);
+            pages.Children.Add(_pagePodcasts);
             root.Children.Add(pages);
 
             BuildMusic();
@@ -388,6 +391,9 @@ namespace IslandPlayer
                 _side.Children.Add(smart);
             }
             // okna: statystyki i impreza
+            var tidy = SideItem(L.T("Porządkuj bibliotekę", "Tidy up library"), -1, null, "M14,2 L20,8 L11,17 L5,11 Z M4,12 L10,18 L7,21 L2,21 L2,16 Z");
+            tidy.MouseLeftButtonUp += (s, e) => LibraryCleanupWindow.ShowWindow(this);
+            _side.Children.Add(tidy);
             var wrapped = SideItem("Isabelle Wrapped", -1, null, "M3,21 V13 H7 V21 Z M10,21 V3 H14 V21 Z M17,21 V9 H21 V21 Z");
             wrapped.MouseLeftButtonUp += (s, e) => WrappedWindow.ShowWindow();
             _side.Children.Add(wrapped);
@@ -883,8 +889,12 @@ namespace IslandPlayer
         {
             _pageMusic.Visibility = i == 0 ? Visibility.Visible : Visibility.Collapsed;
             _pageRadio.Visibility = i == 1 ? Visibility.Visible : Visibility.Collapsed;
+            _pagePodcasts.Visibility = i == 2 ? Visibility.Visible : Visibility.Collapsed;
+            // podcasty budujemy dopiero przy pierwszym otwarciu zakładki (wczytują listę z internetu)
+            if (i == 2 && _pagePodcasts.Children.Count == 0) _pagePodcasts.Children.Add(new PodcastView(_accent));
             PaintTab(_tabMusic, i == 0);
             PaintTab(_tabRadio, i == 1);
+            PaintTab(_tabPodcasts, i == 2);
             if (App.Config.LibraryTab != i) { App.Config.LibraryTab = i; App.Config.Save(); }
         }
 

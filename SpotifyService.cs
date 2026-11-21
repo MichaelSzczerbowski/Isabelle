@@ -330,11 +330,14 @@ namespace IslandPlayer
         /// Włącza utwór w Spotify od razu. Gdy Spotify nie gra na żadnym urządzeniu - wybiera ten komputer,
         /// a gdy Spotify jest wyłączony - uruchamia go zminimalizowanego i czeka, aż się zgłosi.
         /// </summary>
-        public static async Task<string> PlayAsync(string uri)
+        public static Task<string> PlayAsync(string uri) => PlayUrisAsync(new List<string> { uri });
+
+        /// <summary>Włącza listę utworów (pierwszy od razu, reszta po kolei).</summary>
+        public static async Task<string> PlayUrisAsync(List<string> uris)
         {
             try
             {
-                string body = "{\"uris\":[\"" + uri + "\"]}";
+                string body = JsonSerializer.Serialize(new { uris });
                 var (status, text) = await Send(HttpMethod.Put, "https://api.spotify.com/v1/me/player/play", body);
                 if (status >= 200 && status < 300) return null;
                 if (status == 403)
