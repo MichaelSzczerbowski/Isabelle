@@ -293,11 +293,23 @@ namespace IslandPlayer
             public string Uri, Title, Artist, Art;
         }
 
+        /// <summary>Ostatni błąd Spotify (do podpowiedzi w wyszukiwaniu), null = wszystko działa.</summary>
+        public static string LastError { get; private set; }
+
+        /// <summary>Utwory ze Spotify; null = Spotify nie odpowiedział (powód w LastError).</summary>
         public static async Task<List<SpotifyTrack>> SearchAsync(string query, int limit)
         {
             var list = new List<SpotifyTrack>();
-            using var doc = await Api(HttpMethod.Get, "https://api.spotify.com/v1/search?type=track&market=from_token&limit=" + limit + "&q=" + Uri.EscapeDataString(query));
-            if (doc == null || !doc.RootElement.TryGetProperty("tracks", out var tracks)) return list;
+            var (status, text) = await Send(HttpMethod.Get, "https://api.spotify.com/v1/search?type=track&limit=" + limit + "&q=" + Uri.EscapeDataString(query));
+            if (status < 200 || status >= 300 || string.IsNullOrWhiteSpace(text))
+            {
+                LastError = status + (string.IsNullOrWhiteSpace(text) ? "" : ": " + ErrorMessage(text));
+                Log.Info("spotify szukaj: " + LastError);
+                return null;
+            }
+            LastError = null;
+            using var doc = JsonDocument.Parse(text);
+            if (!doc.RootElement.TryGetProperty("tracks", out var tracks)) return list;
             foreach (var t in tracks.GetProperty("items").EnumerateArray())
             {
                 var item = new SpotifyTrack
@@ -373,6 +385,20 @@ namespace IslandPlayer
                 else if (computer == null && d.TryGetProperty("type", out var t2) && t2.GetString() == "Computer") computer = id;
             }
             return computer ?? active ?? any;
+        }
+
+        /// <summary>Czytelny opis błędu z odpowiedzi Spotify ({"error":{"message":...}}).</summary>
+        private static string ErrorMessage(string json)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                var e = doc.RootElement.GetProperty("error");
+                if (e.ValueKind == JsonValueKind.Object && e.TryGetProperty("message", out var m)) return m.GetString();
+                if (e.ValueKind == JsonValueKind.String) return e.GetString();
+            }
+            catch { }
+            return json.Length > 120 ? json.Substring(0, 120) : json;
         }
 
         // ================= pomocnicze =================
