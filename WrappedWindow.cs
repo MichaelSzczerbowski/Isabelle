@@ -81,7 +81,8 @@ namespace IslandPlayer
             var titleRow = new Grid();
             titleRow.Children.Add(new TextBlock { Text = "Isabelle Wrapped", FontSize = 28, FontWeight = FontWeights.Bold });
             var close = new TextBlock { Text = "✕", FontSize = 16, Foreground = Hex("#99FFFFFF"), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Cursor = Cursors.Hand, Padding = new Thickness(8, 2, 2, 2) };
-            close.MouseLeftButtonUp += (s, e) => Close();
+            // przeciąganie okna przechwytywało mysz i ✕ nie działał - zamykamy już przy wciśnięciu
+            close.MouseLeftButtonDown += (s, e) => { e.Handled = true; Close(); };
             titleRow.Children.Add(close);
             titleRow.MouseLeftButtonDown += (s, e) => { if (e.ButtonState == MouseButtonState.Pressed) try { DragMove(); } catch { } };
             head.Children.Add(titleRow);

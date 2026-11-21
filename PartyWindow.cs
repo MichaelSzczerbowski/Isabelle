@@ -90,7 +90,8 @@ namespace IslandPlayer
             var titleRow = new Grid();
             titleRow.Children.Add(new TextBlock { Text = L.T("Tryb imprezy 🎉", "Party mode 🎉"), FontSize = 24, FontWeight = FontWeights.Bold });
             var close = new TextBlock { Text = "✕", FontSize = 16, Foreground = Hex("#99FFFFFF"), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Cursor = Cursors.Hand, Padding = new Thickness(8, 2, 2, 2) };
-            close.MouseLeftButtonUp += (s, e) => Close();
+            // przeciąganie okna przechwytywało mysz i ✕ nie działał - zamykamy już przy wciśnięciu
+            close.MouseLeftButtonDown += (s, e) => { e.Handled = true; Close(); };
             titleRow.Children.Add(close);
             _body.Children.Add(titleRow);
             _body.Children.Add(new TextBlock
@@ -127,7 +128,7 @@ namespace IslandPlayer
                 Text = PartyServer.Url, FontSize = 12, Foreground = Hex("#B3FFFFFF"), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 10, 0, 2),
                 Cursor = Cursors.Hand, ToolTip = L.T("Kliknij, aby skopiować", "Click to copy"),
             };
-            url.MouseLeftButtonUp += (s, e) => { try { Clipboard.SetText(PartyServer.Url); url.Text = L.T("Skopiowano ✓", "Copied ✓"); } catch { } };
+            url.MouseLeftButtonDown += (s, e) => { e.Handled = true; try { Clipboard.SetText(PartyServer.Url); url.Text = L.T("Skopiowano ✓", "Copied ✓"); } catch { } };
             _body.Children.Add(url);
             _body.Children.Add(new TextBlock
             {
