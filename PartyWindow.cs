@@ -26,6 +26,9 @@ namespace IslandPlayer
 
         private readonly StackPanel _body = new StackPanel();
         private readonly SolidColorBrush _accent;
+        private bool _closing;
+        // po włączeniu imprezy Windows może pokazać okno zapory - wtedy nie zamykamy
+        private DateTime _ignoreDeactivateUntil = DateTime.MinValue;
         private readonly Action<PartyRequest> _onAdded;
         private readonly Action _onState;
 
@@ -60,6 +63,13 @@ namespace IslandPlayer
             card.Child = root;
             Content = card;
             MouseLeftButtonDown += (s, e) => { if (e.ButtonState == MouseButtonState.Pressed && e.OriginalSource is not TextBox) try { DragMove(); } catch { } };
+            // kliknięcie poza okno = zamknij (jak menu)
+            Deactivated += (s, e) =>
+            {
+                if (_closing || DateTime.UtcNow < _ignoreDeactivateUntil) return;
+                _closing = true;
+                try { Close(); } catch { }
+            };
             KeyDown += (s, e) => { if (e.Key == Key.Escape) Close(); };
 
             _onAdded = r => Dispatcher.BeginInvoke(new Action(Render));
@@ -91,7 +101,12 @@ namespace IslandPlayer
             {
                 if (PartyServer.Error != null)
                     _body.Children.Add(new TextBlock { Text = PartyServer.Error, FontSize = 12, Foreground = Hex("#FF8A80"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10) });
-                _body.Children.Add(BigButton(L.T("Zacznij imprezę", "Start the party"), true, () => { PartyServer.Start(); Render(); }));
+                _body.Children.Add(BigButton(L.T("Zacznij imprezę", "Start the party"), true, () =>
+                {
+                    _ignoreDeactivateUntil = DateTime.UtcNow.AddSeconds(15);     // okno zapory Windows nie zamyka imprezy
+                    PartyServer.Start();
+                    Render();
+                }));
                 return;
             }
 

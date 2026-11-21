@@ -32,6 +32,9 @@ namespace IslandPlayer
         private readonly StackPanel _body = new StackPanel();
         private readonly WrapPanel _chips = new WrapPanel { Margin = new Thickness(0, 14, 0, 6) };
         private readonly SolidColorBrush _accent;
+        private bool _closing;
+        // po włączeniu imprezy Windows może pokazać okno zapory - wtedy nie zamykamy
+        private DateTime _ignoreDeactivateUntil = DateTime.MinValue;
         private string _period = "week";
 
         private WrappedWindow()
@@ -86,6 +89,13 @@ namespace IslandPlayer
             Grid.SetRow(scroll, 1);
             layout.Children.Add(scroll);
 
+            // kliknięcie poza okno = zamknij (jak menu)
+            Deactivated += (s, e) =>
+            {
+                if (_closing || DateTime.UtcNow < _ignoreDeactivateUntil) return;
+                _closing = true;
+                try { Close(); } catch { }
+            };
             KeyDown += (s, e) => { if (e.Key == Key.Escape) Close(); };
             Render();
         }
