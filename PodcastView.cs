@@ -244,18 +244,25 @@ namespace IslandPlayer
                     right = pos > 0 && ep.Duration > 0 ? L.T("zostało ", "") + Dur((int)(ep.Duration - pos)) + L.T("", " left") : null;
                 }
                 var dot = PlayDot(out var icon);
-                var row = Row(dot, ep.Title, meta, right, () =>
+                // kliknięcie obsługujemy już przy wciśnięciu (niżej) - ten sam odcinek = pauza / wznów, inny = włącz
+                var row = Row(dot, ep.Title, meta, right, () => { });
+                // najechanie = przygotuj start (rozwiąż przekierowania), kliknięcie od razu przy wciśnięciu
+                row.MouseEnter += (s, e) => _ = PodcastService.ResolveAsync(ep.Url);
+                row.PreviewMouseLeftButtonDown += (s, e) =>
                 {
-                    // ten sam odcinek = pauza / wznów; inny = włącz (ikonka zmienia się od razu, razem z wyspą)
+                    e.Handled = true;
                     if (LocalPlayer.CurrentEpisode?.Key == ep.Key) LocalPlayer.TogglePause();
-                    else { LocalPlayer.PlayPodcast(ep); ShowPlaying(ep.Key, true); }
-                });
+                    else { ShowPlaying(ep.Key, true); LocalPlayer.PlayPodcast(ep); }
+                };
                 var title = (TextBlock)((StackPanel)((Grid)row.Child).Children[1]).Children[0];
                 _epIcons[ep.Key] = (icon, title);
                 _rows.Children.Add(row);
             }
             RefreshIcons();
             _scroll.ScrollToVerticalOffset(offset);
+            // najnowsze odcinki i ten zaczęty przygotowujemy od razu
+            foreach (var ep in eps.Take(3)) _ = PodcastService.ResolveAsync(ep.Url);
+            foreach (var ep in eps.Take(80).Where(x => PodcastService.Position(x.Key) > 0).Take(2)) _ = PodcastService.ResolveAsync(ep.Url);
         }
 
         /// <summary>▶ / ❚❚ przy odcinkach według tego, co naprawdę gra (te same zdarzenia co wyspa).</summary>

@@ -530,7 +530,9 @@ namespace IslandPlayer
                 NowPlaying = ep.Show + " – " + ep.Title;
                 Changed?.Invoke();
 
-                var item = new MediaPlaybackItem(MediaSource.CreateFromUri(new Uri(ep.Url)));
+                // adres po przekierowaniach (rozwiązany zawczasu) - odtwarzacz od razu pobiera plik
+                string url = PodcastService.ResolvedUrl(ep.Url) ?? ep.Url;
+                var item = new MediaPlaybackItem(MediaSource.CreateFromUri(new Uri(url)));
                 var props = item.GetDisplayProperties();
                 props.Type = MediaPlaybackType.Music;
                 props.MusicProperties.Title = ep.Title;

@@ -271,6 +271,35 @@ namespace IslandPlayer
             return list;
         }
 
+        // ================= szybki start odcinka =================
+        // Adresy odcinków zwykle przechodzą przez 2-4 przekierowania (liczniki statystyk) zanim trafią do pliku.
+        // Rozwiązujemy je zawczasu (po najechaniu na odcinek), więc po kliknięciu odtwarzacz od razu pobiera plik.
+        private static readonly Dictionary<string, string> Resolved = new Dictionary<string, string>();
+        private static readonly HashSet<string> Resolving = new HashSet<string>();
+
+        public static string ResolvedUrl(string url)
+        {
+            lock (Resolved) return url != null && Resolved.TryGetValue(url, out var r) ? r : null;
+        }
+
+        public static async Task ResolveAsync(string url)
+        {
+            if (string.IsNullOrEmpty(url)) return;
+            lock (Resolved) { if (Resolved.ContainsKey(url) || !Resolving.Add(url)) return; }
+            try
+            {
+                using var req = new HttpRequestMessage(HttpMethod.Get, url);
+                req.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(0, 0);     // tylko nagłówki, bez pliku
+                using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(5));
+                using var res = await Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+                string final = res.RequestMessage?.RequestUri?.ToString();
+                if (res.IsSuccessStatusCode && !string.IsNullOrEmpty(final))
+                    lock (Resolved) { Resolved[url] = final; if (Resolved.Count > 300) Resolved.Clear(); }
+            }
+            catch { }
+            finally { lock (Resolved) Resolving.Remove(url); }
+        }
+
         private static int ParseDuration(string s)
         {
             if (string.IsNullOrWhiteSpace(s)) return 0;
