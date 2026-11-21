@@ -219,7 +219,7 @@ namespace IslandPlayer
             if (LibraryService.Tracks.Count == 0) LibraryService.LoadCache();
             return Serialize(LibraryService.Tracks.ToList().Select(t => new
             {
-                id = ToId(t.Path), title = t.Title, artist = t.Artist, album = t.Album ?? "", dur = Math.Round(t.Duration), art = !string.IsNullOrEmpty(t.CoverPath),
+                id = ToId(t.Path), title = t.Title, artist = t.Artist, album = t.Album ?? "", dur = Math.Round(t.Duration), art = t.CoverPath != "",
             }));
         }
 
@@ -232,6 +232,9 @@ namespace IslandPlayer
         private static async Task Art(NetworkStream s, Dictionary<string, string> q)
         {
             var t = TrackById(q.TryGetValue("id", out var id) ? id : "");
+            // okładka jeszcze nieszukana (utwór nie był grany na komputerze) - poszukaj teraz, jak robi to odtwarzacz
+            if (t != null && (t.CoverPath == null || (t.CoverPath.Length > 0 && !File.Exists(t.CoverPath))))
+            { t.CoverPath = null; try { await CoverFinder.Find(t); } catch { } }
             if (t == null || string.IsNullOrEmpty(t.CoverPath) || !File.Exists(t.CoverPath)) { await Send(s, "404 Not Found", "text/plain", Array.Empty<byte>()); return; }
             string type = t.CoverPath.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ? "image/png" : "image/jpeg";
             await Send(s, "200 OK", type, await File.ReadAllBytesAsync(t.CoverPath), "public, max-age=86400");
@@ -282,7 +285,7 @@ namespace IslandPlayer
             string[] words = term.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             bool Match(string hay) => words.All(w => hay.IndexOf(w, StringComparison.CurrentCultureIgnoreCase) >= 0);
             var lib = LibraryService.Tracks.ToList().Where(t => Match(t.Title + " " + t.Artist + " " + t.Album)).Take(8)
-                .Select(t => new { id = ToId(t.Path), title = t.Title, artist = t.Artist, art = !string.IsNullOrEmpty(t.CoverPath) }).ToList();
+                .Select(t => new { id = ToId(t.Path), title = t.Title, artist = t.Artist, art = t.CoverPath != "" }).ToList();
 
             var radioTask = SafeTask(RadioService.Search(term));
             var podTask = SafeTask(PodcastService.SearchAsync(term));

@@ -38,21 +38,21 @@ h2{font-size:15px;color:#ffffffb0;margin:22px 4px 8px;font-weight:650}
 .seg button.on{background:#fff;color:#000}
 /* teraz gra */
 .cover{width:100%;aspect-ratio:1;border-radius:22px;background:#ffffff14 center/cover no-repeat;box-shadow:0 20px 50px #0008;margin:6px 0 20px}
-.tt{font-size:22px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ta{font-size:16px;color:var(--sub);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tt{text-align:center;font-size:22px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ta{text-align:center;font-size:16px;color:var(--sub);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .prog{margin:18px 0 6px;height:22px;display:flex;align-items:center;touch-action:none}
 .bar{position:relative;height:5px;border-radius:3px;background:#ffffff26;flex:1}
 .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:#fff}
 .times{display:flex;justify-content:space-between;font-size:12px;color:var(--sub);font-variant-numeric:tabular-nums}
-.ctr{display:flex;align-items:center;justify-content:center;gap:34px;margin:14px 0 18px}
-.ctr button{background:none;border:0;color:#fff;padding:6px}
+.ctr{display:flex;align-items:center;justify-content:center;gap:30px;margin:16px auto 18px;width:100%}
+.ctr button{background:none;border:0;color:#fff;padding:0;width:56px;height:56px;display:flex;align-items:center;justify-content:center;flex:none}
 .ctr svg{width:34px;height:34px}
 .big{width:72px;height:72px;border-radius:36px;background:#fff!important;color:#000!important;display:flex;align-items:center;justify-content:center}
 .big svg{width:30px;height:30px}
 input[type=range]{flex:1;-webkit-appearance:none;appearance:none;height:5px;border-radius:3px;background:#ffffff26;outline:none}
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:11px;background:#fff;box-shadow:0 2px 6px #0006}
 .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#fff;background:var(--glass);border:1px solid var(--glassb);border-radius:12px;padding:5px 11px}
-.lyr{margin-top:22px;background:var(--glass);border:1px solid var(--glassb);border-radius:24px;padding:18px 18px 22px;max-height:46vh;overflow:auto;scroll-behavior:smooth}
+.lyr{text-align:center;margin-top:22px;background:var(--glass);border:1px solid var(--glassb);border-radius:24px;padding:18px 18px 22px;max-height:46vh;overflow:auto;scroll-behavior:smooth}
 .lyr p{margin:0 0 12px;font-size:20px;font-weight:750;color:#ffffff4d;transition:color .25s}
 .lyr p.on{color:#fff}
 /* listy */
@@ -104,12 +104,12 @@ body.mini main{padding-bottom:calc(176px + env(safe-area-inset-bottom))}
     <div class="cover" id="cv"></div>
     <div class="tt" id="tt">–</div>
     <div class="ta" id="ta"></div>
-    <div style="margin-top:8px"><span class="chip" id="src"></span></div>
+    <div style="margin-top:10px;text-align:center"><span class="chip" id="src"></span></div>
     <div class="prog" id="prog"><div class="bar"><i id="pfill"></i></div></div>
     <div class="times"><span id="tpos">0:00</span><span id="tdur">0:00</span></div>
     <div class="ctr">
       <button id="bprev" aria-label="Poprzedni"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
-      <button id="bplay" class="big" aria-label="Pauza"><svg viewBox="0 0 24 24" fill="currentColor" id="iplay"><path d="M7 4l13 8-13 8z"/></svg></button>
+      <button id="bplay" class="big" aria-label="Pauza"><svg viewBox="0 0 24 24" fill="currentColor" id="iplay" style="width:34px;height:34px"><path d="M7 4l13 8-13 8z"/></svg></button>
       <button id="bnext" aria-label="Następny"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 5l11 7-11 7z"/></svg></button>
     </div>
     <div class="lyr" id="lyr" style="display:none"></div>
@@ -194,7 +194,7 @@ let mode = localStorage.getItem('mode') || 'pc';
 function setMode(m) {
   mode = m; localStorage.setItem('mode', m);
   document.querySelectorAll('#mode button').forEach(b => b.classList.toggle('on', b.dataset.m === m));
-  $('lyr').style.display = 'none'; lastLyr = '';
+  $('lyr').style.display = 'none'; lastLyr = ''; lastCover = null; now = null;
   if (m === 'pc') { au.pause(); } else { $('offline').style.display = 'none'; }
   renderPhone();
 }
