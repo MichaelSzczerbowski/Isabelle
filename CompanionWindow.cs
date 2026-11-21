@@ -76,11 +76,32 @@ namespace IslandPlayer
             Render();
         }
 
+        /// <summary>Ikonka telefonu w stylu Isabelle: zaokrąglona obudowa, w środku czarna wyspa z kolorowymi słupkami.</summary>
+        private static FrameworkElement PhoneIcon()
+        {
+            var c = new Canvas { Width = 20, Height = 30, Margin = new Thickness(10, 3, 0, 0), VerticalAlignment = VerticalAlignment.Center, SnapsToDevicePixels = true };
+            c.Children.Add(new Border { Width = 20, Height = 30, CornerRadius = new CornerRadius(5), BorderThickness = new Thickness(2), BorderBrush = Brushes.White, Background = Hex("#22FFFFFF") });
+            var island = new Border { Width = 10, Height = 4, CornerRadius = new CornerRadius(2), Background = Brushes.Black };
+            Canvas.SetLeft(island, 5); Canvas.SetTop(island, 4); c.Children.Add(island);
+            var accent = new LinearGradientBrush(Color.FromRgb(255, 92, 160), Color.FromRgb(138, 92, 255), 0);
+            double[] h = { 5, 9, 6 };
+            for (int i = 0; i < 3; i++)
+            {
+                var bar = new Border { Width = 2.4, Height = h[i], CornerRadius = new CornerRadius(1.2), Background = accent };
+                Canvas.SetLeft(bar, 6 + i * 3.4); Canvas.SetTop(bar, 21 - h[i]); c.Children.Add(bar);
+            }
+            return c;
+        }
+
         private void Render()
         {
             _body.Children.Clear();
             var titleRow = new Grid();
-            titleRow.Children.Add(new TextBlock { Text = L.T("Isabelle w telefonie 📱", "Isabelle on your phone 📱"), FontSize = 24, FontWeight = FontWeights.Bold });
+            // tytuł + własna ikonka telefonu z wyspą (emoji 📱 w WPF rysuje się czarno-biało i krzywo)
+            var head = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            head.Children.Add(new TextBlock { Text = L.T("Isabelle w telefonie", "Isabelle on your phone"), FontSize = 24, FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center });
+            head.Children.Add(PhoneIcon());
+            titleRow.Children.Add(head);
             var close = new TextBlock { Text = "✕", FontSize = 16, Foreground = Hex("#99FFFFFF"), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Cursor = Cursors.Hand, Padding = new Thickness(8, 2, 2, 2) };
             close.MouseLeftButtonDown += (s, e) => { e.Handled = true; Close(); };
             titleRow.Children.Add(close);
