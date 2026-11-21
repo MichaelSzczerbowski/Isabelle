@@ -42,6 +42,7 @@ namespace IslandPlayer
             public string Smart;
             public Border Row;
             public Border Art;
+            public TextBlock Enter;
         }
 
         private readonly TextBox _box = new TextBox();
@@ -56,7 +57,7 @@ namespace IslandPlayer
         private QuickSearchWindow()
         {
             Title = L.T("Isabelle – szukaj", "Isabelle – search");
-            Width = 620;
+            Width = 452;
             SizeToContent = SizeToContent.Height;
             WindowStyle = WindowStyle.None;
             AllowsTransparency = true;
@@ -68,50 +69,63 @@ namespace IslandPlayer
             Foreground = Brushes.White;
             UseLayoutRounding = true;
             _accent = new SolidColorBrush(App.Island?.AccentColor ?? Color.FromRgb(255, 92, 160));
-
-            // na ekranie z kursorem, w górnej części (jak Spotlight)
-            var area = System.Windows.Forms.Screen.FromPoint(System.Windows.Forms.Cursor.Position).WorkingArea;
-            var src = App.Island != null ? PresentationSource.FromVisual(App.Island) : null;
-            double sx = src?.CompositionTarget?.TransformFromDevice.M11 ?? 1, sy = src?.CompositionTarget?.TransformFromDevice.M22 ?? 1;
             WindowStartupLocation = WindowStartupLocation.Manual;
-            Left = (area.Left + area.Width / 2.0) * sx - Width / 2;
-            Top = (area.Top + area.Height * 0.2) * sy;
+
+            // wyspa „rośnie w dół”: czarna pigułka startuje dokładnie w miejscu wyspy i przykrywa ją
+            bool fromIsland = false;
+            var isl = App.Island;
+            if (isl != null && isl.IsVisible && (App.Config.Edge ?? "top") == "top")
+            {
+                double sc = isl.RootScale.ScaleX;
+                Left = isl.Left + isl.Root.Width * sc / 2 - Width / 2;
+                Top = isl.Top + 8 * sc;
+                fromIsland = true;
+            }
+            else
+            {
+                // wyspa z boku / na dole - na środku górnej części ekranu z kursorem
+                var area = System.Windows.Forms.Screen.FromPoint(System.Windows.Forms.Cursor.Position).WorkingArea;
+                var src = isl != null ? PresentationSource.FromVisual(isl) : null;
+                double sx = src?.CompositionTarget?.TransformFromDevice.M11 ?? 1, sy = src?.CompositionTarget?.TransformFromDevice.M22 ?? 1;
+                Left = (area.Left + area.Width / 2.0) * sx - Width / 2;
+                Top = (area.Top + area.Height * 0.18) * sy;
+            }
 
             var card = new Border
             {
-                Margin = new Thickness(20), CornerRadius = new CornerRadius(22), Background = Hex("#F2161619"),
-                BorderBrush = Hex("#2EFFFFFF"), BorderThickness = new Thickness(1), Padding = new Thickness(8),
-                Effect = new DropShadowEffect { BlurRadius = 30, ShadowDepth = 8, Opacity = 0.6, Direction = 270, Color = Colors.Black },
+                Margin = new Thickness(16, 0, 16, 18), CornerRadius = new CornerRadius(26), Background = Brushes.Black,
+                Padding = new Thickness(10, 8, 10, 10),
+                Effect = new DropShadowEffect { BlurRadius = 22, ShadowDepth = 6, Opacity = 0.45, Direction = 270, Color = Colors.Black },
             };
             var stack = new StackPanel();
             card.Child = stack;
             Content = card;
 
             // ---- pole wyszukiwania ----
-            var field = new Grid { Margin = new Thickness(10, 6, 10, 6) };
+            var field = new Grid { Margin = new Thickness(8, 4, 8, 6) };
             field.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             field.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             field.Children.Add(new Path
             {
-                Data = Geometry.Parse("M10,2 A8,8 0 1 1 9.99,2 Z M16,16 L22,22"), Stroke = _accent, StrokeThickness = 2.2,
-                Width = 20, Height = 20, Stretch = Stretch.Uniform, Margin = new Thickness(0, 0, 14, 0), VerticalAlignment = VerticalAlignment.Center,
+                Data = Geometry.Parse("M10,2 A8,8 0 1 1 9.99,2 Z M16,16 L22,22"), Stroke = _accent, StrokeThickness = 2.4,
+                Width = 15, Height = 15, Stretch = Stretch.Uniform, Margin = new Thickness(0, 0, 11, 0), VerticalAlignment = VerticalAlignment.Center,
                 StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
             });
             var boxHost = new Grid();
             Grid.SetColumn(boxHost, 1);
-            _hint.Text = L.T("Utwór, wykonawca, playlista albo stacja radiowa…", "Track, artist, playlist or radio station…");
-            _hint.FontSize = 20;
+            _hint.Text = L.T("Szukaj muzyki i radia", "Search music and radio");
+            _hint.FontSize = 15.5;
             _hint.Foreground = Hex("#59FFFFFF");
             _hint.VerticalAlignment = VerticalAlignment.Center;
             _hint.IsHitTestVisible = false;
             boxHost.Children.Add(_hint);
-            _box.FontSize = 20;
+            _box.FontSize = 15.5;
             _box.Background = Brushes.Transparent;
             _box.Foreground = Brushes.White;
             _box.CaretBrush = Brushes.White;
             _box.BorderThickness = new Thickness(0);
             _box.VerticalContentAlignment = VerticalAlignment.Center;
-            _box.Padding = new Thickness(0, 4, 0, 4);
+            _box.Padding = new Thickness(-2, 3, 0, 3);
             boxHost.Children.Add(_box);
             field.Children.Add(boxHost);
             stack.Children.Add(field);
@@ -125,18 +139,18 @@ namespace IslandPlayer
             PreviewKeyDown += OnKey;
             Deactivated += (s, e) => SafeClose();
 
-            // wejście: lekkie powiększenie i pojawienie się
+            // wejście: pigułka rozciąga się w dół z miejsca wyspy (albo lekko pojawia się na środku ekranu)
             card.RenderTransformOrigin = new Point(0.5, 0);
-            var sc = new ScaleTransform(0.97, 0.97);
-            card.RenderTransform = sc;
+            var scale = new ScaleTransform(fromIsland ? 0.45 : 0.97, fromIsland ? 0.25 : 0.97);
+            card.RenderTransform = scale;
             card.Opacity = 0;
             Loaded += (s, e) =>
             {
-                var d = TimeSpan.FromMilliseconds(160);
-                var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
-                card.BeginAnimation(OpacityProperty, new DoubleAnimation(1, d));
-                sc.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(1, d) { EasingFunction = ease });
-                sc.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(1, d) { EasingFunction = ease });
+                var d = TimeSpan.FromMilliseconds(fromIsland ? 300 : 160);
+                var back = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.25 };
+                card.BeginAnimation(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(120)));
+                scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(1, d) { EasingFunction = back });
+                scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(1, d) { EasingFunction = back });
             };
 
             if (LibraryService.Tracks.Count == 0) LibraryService.LoadCache();
@@ -175,7 +189,7 @@ namespace IslandPlayer
             {
                 // puste pole: szybkie skróty
                 list.Add(new Result { Kind = "smart", Smart = "shuffle", Title = L.T("Losowo z całej biblioteki", "Shuffle my library"), Subtitle = L.T("Moja muzyka", "My music"), Badge = "" });
-                foreach (var st in (App.Config.RadioRecent ?? new List<RadioStation>()).Take(4))
+                foreach (var st in (App.Config.RadioRecent ?? new List<RadioStation>()).Take(3))
                     list.Add(StationResult(st, L.T("Ostatnio słuchane", "Recently played")));
                 ShowResults(list);
                 return;
@@ -189,19 +203,19 @@ namespace IslandPlayer
                 .Where(t => Match(t.Title + " " + t.Artist + " " + t.Album))
                 .OrderByDescending(t => t.Title.StartsWith(q, StringComparison.CurrentCultureIgnoreCase))
                 .ThenByDescending(t => PlayStats.Plays(t.Path))
-                .Take(6);
+                .Take(3);
             foreach (var t in tracks)
                 list.Add(new Result { Kind = "track", Track = t, Title = t.Title, Subtitle = t.Artist, Badge = L.T("Utwór", "Track") });
 
             // 2) playlisty
-            foreach (var pl in PlaylistStore.Playlists.Where(p => Match(p.Name)).Take(2))
+            foreach (var pl in PlaylistStore.Playlists.Where(p => Match(p.Name)).Take(1))
                 list.Add(new Result { Kind = "playlist", Playlist = pl, Title = pl.Name, Subtitle = string.Format(L.T("{0} utw.", "{0} tracks"), pl.Paths.Count), Badge = L.T("Playlista", "Playlist") });
 
             // 3) stacje: ulubione i ostatnie (od razu), potem baza radia z internetu
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var st in (App.Config.RadioFavorites ?? new List<RadioStation>()).Concat(App.Config.RadioRecent ?? new List<RadioStation>()))
             {
-                if (list.Count(r => r.Kind == "station") >= 3) break;
+                if (list.Count(r => r.Kind == "station") >= 2) break;
                 if (!Match(st.Name) || !seen.Add(st.Url)) continue;
                 list.Add(StationResult(st, LocalPlayer.IsFavorite(st) ? L.T("Ulubiona stacja", "Favorite station") : L.T("Ostatnio słuchane", "Recently played")));
             }
@@ -217,7 +231,7 @@ namespace IslandPlayer
                 int added = 0;
                 foreach (var st in found)
                 {
-                    if (added >= 4) break;
+                    if (added >= 2) break;
                     if (!st.LastCheckOk || !seen.Add(st.Url)) continue;
                     list.Add(StationResult(st, string.IsNullOrWhiteSpace(st.Country) ? L.T("Radio", "Radio") : st.Country));
                     added++;
@@ -239,17 +253,17 @@ namespace IslandPlayer
             {
                 _rows.Children.Add(new TextBlock
                 {
-                    Text = L.T("Nic nie znaleziono", "Nothing found"), FontSize = 13.5, Foreground = Hex("#80FFFFFF"),
-                    Margin = new Thickness(16, 6, 16, 12),
+                    Text = L.T("Nic nie znaleziono", "Nothing found"), FontSize = 12.5, Foreground = Hex("#73FFFFFF"),
+                    Margin = new Thickness(10, 2, 10, 6),
                 });
                 _sel = -1;
                 return;
             }
-            _rows.Children.Add(new Border { Height = 1, Background = Hex("#1AFFFFFF"), Margin = new Thickness(6, 2, 6, 6) });
             for (int i = 0; i < list.Count; i++) _rows.Children.Add(MakeRow(list[i], i));
             Select(keepSelection ? Math.Min(old, list.Count - 1) : 0);
         }
 
+        /// <summary>Wiersz bez ramek i etykiet: miniatura, tytuł, podpis; przy zaznaczonym ↵.</summary>
         private Border MakeRow(Result r, int index)
         {
             var g = new Grid();
@@ -257,8 +271,13 @@ namespace IslandPlayer
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-            // miniatura: okładka / logo stacji / ikonka
-            var art = new Border { Width = 40, Height = 40, CornerRadius = new CornerRadius(8), Background = Hex("#1FFFFFFF"), Margin = new Thickness(0, 0, 12, 0), ClipToBounds = true };
+            // miniatura: okładka / logo stacji (okrągłe) / ikonka
+            bool round = r.Kind == "station";
+            var art = new Border
+            {
+                Width = 32, Height = 32, CornerRadius = new CornerRadius(round ? 16 : 8), Background = Hex("#1FFFFFFF"),
+                Margin = new Thickness(0, 0, 11, 0), ClipToBounds = true,
+            };
             string icon = r.Kind switch
             {
                 "playlist" => GlassMenu.ListIcon,
@@ -268,7 +287,7 @@ namespace IslandPlayer
             };
             art.Child = new Path
             {
-                Data = Geometry.Parse(icon), Stroke = Hex("#CCFFFFFF"), StrokeThickness = 1.6, Width = 18, Height = 18, Stretch = Stretch.Uniform,
+                Data = Geometry.Parse(icon), Stroke = Hex("#B3FFFFFF"), StrokeThickness = 1.6, Width = 15, Height = 15, Stretch = Stretch.Uniform,
                 StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, StrokeLineJoin = PenLineJoin.Round,
                 HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
             };
@@ -278,20 +297,18 @@ namespace IslandPlayer
             g.Children.Add(art);
 
             var texts = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-            texts.Children.Add(new TextBlock { Text = r.Title, FontSize = 14.5, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
+            texts.Children.Add(new TextBlock { Text = r.Title, FontSize = 13.5, TextTrimming = TextTrimming.CharacterEllipsis });
             if (!string.IsNullOrWhiteSpace(r.Subtitle))
-                texts.Children.Add(new TextBlock { Text = r.Subtitle, FontSize = 12.5, Foreground = Hex("#8CFFFFFF"), TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 1, 0, 0) });
+                texts.Children.Add(new TextBlock { Text = r.Subtitle, FontSize = 11.5, Foreground = Hex("#80FFFFFF"), TextTrimming = TextTrimming.CharacterEllipsis });
             Grid.SetColumn(texts, 1);
             g.Children.Add(texts);
 
-            if (!string.IsNullOrEmpty(r.Badge))
-            {
-                var badge = new TextBlock { Text = r.Badge, FontSize = 11.5, Foreground = Hex("#80FFFFFF"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 4, 0) };
-                Grid.SetColumn(badge, 2);
-                g.Children.Add(badge);
-            }
+            var enter = new TextBlock { Text = "↵", FontSize = 13, Foreground = Hex("#66FFFFFF"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 2, 0), Opacity = 0 };
+            Grid.SetColumn(enter, 2);
+            g.Children.Add(enter);
+            r.Enter = enter;
 
-            var row = new Border { Child = g, CornerRadius = new CornerRadius(12), Padding = new Thickness(8, 6, 10, 6), Margin = new Thickness(0, 0, 0, 2), Background = Brushes.Transparent, Cursor = Cursors.Hand };
+            var row = new Border { Child = g, CornerRadius = new CornerRadius(15), Padding = new Thickness(7, 6, 10, 6), Background = Brushes.Transparent, Cursor = Cursors.Hand };
             row.MouseEnter += (s, e) => Select(index);
             row.MouseLeftButtonDown += (s, e) => e.Handled = true;
             row.MouseLeftButtonUp += (s, e) => Run(r);
@@ -304,7 +321,11 @@ namespace IslandPlayer
             if (_results.Count == 0) { _sel = -1; return; }
             _sel = (i % _results.Count + _results.Count) % _results.Count;
             for (int k = 0; k < _results.Count; k++)
-                if (_results[k].Row != null) _results[k].Row.Background = k == _sel ? Hex("#1FFFFFFF") : Brushes.Transparent;
+            {
+                bool on = k == _sel;
+                if (_results[k].Row != null) _results[k].Row.Background = on ? Hex("#17FFFFFF") : Brushes.Transparent;
+                if (_results[k].Enter != null) _results[k].Enter.Opacity = on ? 1 : 0;
+            }
         }
 
         private static void SetArt(Border art, string path)
