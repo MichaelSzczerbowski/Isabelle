@@ -39,6 +39,7 @@ namespace IslandPlayer
                     AutoPlay = true,
                 };
                 _player.CommandManager.IsEnabled = true;     // pauza / następny / przewijanie z wyspy i klawiszy
+                _player.Volume = UserVolume;
                 _player.MediaOpened += (s, e) =>
                 {
                     // po przeładowaniu (włączenie korektora) wracamy w to samo miejsce utworu
@@ -543,6 +544,50 @@ namespace IslandPlayer
             catch { return false; }
         }
 
+        // ================= głośność ustawiana z wyspy =================
+        private static double _userVolume = -1;
+        private static System.Windows.Threading.DispatcherTimer _volSave;
+
+        /// <summary>
+        /// Głośność naszego odtwarzacza (0-1) - zmienia ją kółko / suwak w wyspie, tak jak głośność Spotify.
+        /// Przy radiu mnoży się z wyrównaniem głośności stacji. Zapamiętywana między uruchomieniami.
+        /// </summary>
+        public static double UserVolume
+        {
+            get
+            {
+                if (_userVolume < 0) _userVolume = Math.Clamp(App.Config?.LocalVolume ?? 1, 0, 1);
+                return _userVolume;
+            }
+            set
+            {
+                _userVolume = Math.Clamp(value, 0, 1);
+                if (_player != null)
+                {
+                    double g = CurrentStation != null ? _gain : 1;
+                    try { _player.Volume = Math.Clamp(_userVolume * g, 0, 1); } catch { }
+                }
+                // zapis do ustawień chwilę po ostatniej zmianie (nie przy każdym ruchu kółka)
+                var ui = System.Windows.Application.Current?.Dispatcher;
+                if (ui == null) return;
+                ui.BeginInvoke(new Action(() =>
+                {
+                    if (_volSave == null)
+                    {
+                        _volSave = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1.5) };
+                        _volSave.Tick += (s, e) =>
+                        {
+                            _volSave.Stop();
+                            App.Config.LocalVolume = Math.Round(UserVolume, 3);
+                            App.Config.Save();
+                        };
+                    }
+                    _volSave.Stop();
+                    _volSave.Start();
+                }));
+            }
+        }
+
         // ================= wyrównywanie głośności stacji =================
         // Każda stacja nadaje inaczej głośno. Mierzymy, jak głośno gra (szczyt na wyjściu podzielony przez
         // głośność naszego odtwarzacza) i ściszamy głośne stacje do wspólnego poziomu. Wynik pamiętamy
@@ -559,7 +604,7 @@ namespace IslandPlayer
             _levelStart = DateTime.UtcNow;
             var gains = App.Config.RadioGains ??= new Dictionary<string, double>();
             _gain = gains.TryGetValue(StationKey(st), out double g) ? g : 0.75;
-            Player.Volume = _gain;
+            Player.Volume = Math.Clamp(UserVolume * _gain, 0, 1);
             if (_leveler == null)
             {
                 _leveler = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background, System.Windows.Application.Current.Dispatcher)
@@ -576,7 +621,7 @@ namespace IslandPlayer
             _leveler?.Stop();
             if (_player != null)
             {
-                _player.Volume = 1;
+                _player.Volume = UserVolume;
                 try { _player.PlaybackSession.PlaybackRate = 1; } catch { }
             }
         }
@@ -604,7 +649,8 @@ namespace IslandPlayer
             double rate = (DateTime.UtcNow - _levelStart).TotalSeconds < 8 ? 1.2 : 0.25;
             double ln = Math.Log(_gain), lt = Math.Log(target), step = rate * dt;
             _gain = Math.Exp(ln + Math.Clamp(lt - ln, -step, step));
-            if (Math.Abs(_player.Volume - _gain) > 0.003) _player.Volume = _gain;
+            double want = Math.Clamp(UserVolume * _gain, 0, 1);
+            if (Math.Abs(_player.Volume - want) > 0.003) _player.Volume = want;
             if (_measured > 6 && ((int)(_measured * 10)) % 50 == 0)
             {
                 (App.Config.RadioGains ??= new Dictionary<string, double>())[StationKey(st)] = Math.Round(_gain, 3);

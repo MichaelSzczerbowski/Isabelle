@@ -120,6 +120,8 @@ namespace IslandPlayer
         /// <summary>Wersja, której „Co nowego” użytkownik już widział.</summary>
         public string LastSeenVersion { get; set; } = "";
         // korektor dźwięku (Moja muzyka)
+        /// <summary>Głośność własnego odtwarzacza (Moja muzyka i radio), 0-1.</summary>
+        public double LocalVolume { get; set; } = 1;
         public bool EqEnabled { get; set; }
         public string EqPreset { get; set; } = "flat";
         public double[] EqCustom { get; set; } = new double[10];

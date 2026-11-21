@@ -129,6 +129,12 @@ namespace IslandPlayer
 
         private bool UseApp => App.Config.AppVolume && !string.IsNullOrEmpty(TargetApp);
 
+        /// <summary>
+        /// Gra nasz własny odtwarzacz (Moja muzyka / radio) - wtedy wyspa ustawia jego głośność bezpośrednio,
+        /// bez szukania sesji w mikserze Windows (to zawsze działa i nie rusza głośności całego komputera).
+        /// </summary>
+        private bool OwnPlayer => LocalPlayer.Active && (TargetApp ?? "").IndexOf("Isabelle", StringComparison.OrdinalIgnoreCase) >= 0;
+
         /// <summary>Możliwe nazwy procesu dla identyfikatora aplikacji (Spotify.exe, SpotifyAB.SpotifyMusic_...!Spotify, Chrome...).</summary>
         private static List<string> Candidates(string appId)
         {
@@ -215,6 +221,7 @@ namespace IslandPlayer
             {
                 try
                 {
+                    if (OwnPlayer) return (float)LocalPlayer.UserVolume;
                     if (UseApp)
                     {
                         var ss = AppSessions();
@@ -234,6 +241,7 @@ namespace IslandPlayer
                 try
                 {
                     float v = Math.Clamp(value, 0f, 1f);
+                    if (OwnPlayer) { LocalPlayer.UserVolume = v; return; }
                     if (UseApp)
                     {
                         var ss = AppSessions();
@@ -259,7 +267,7 @@ namespace IslandPlayer
         public bool Fading => _fading;
 
         /// <summary>Czy zmiana dotyczy samego odtwarzacza (do podpisu w wyspie).</summary>
-        public bool IsAppVolume => UseApp && AppSessions().Count > 0;
+        public bool IsAppVolume => OwnPlayer || UseApp && AppSessions().Count > 0;
 
         public bool Muted
         {
