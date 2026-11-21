@@ -129,6 +129,11 @@ namespace IslandPlayer
         public List<EqUserPreset> EqUserPresets { get; set; } = new List<EqUserPreset>();
         /// <summary>Folder śledzony w tle (np. Pobrane) - nowa muzyka z niego sama trafia do biblioteki. "" = wyłączone.</summary>
         public string WatchFolder { get; set; } = "";
+        // Spotify (pełne piosenki w szybkim wyszukiwaniu - konto Premium)
+        public string SpotifyClientId { get; set; } = "";
+        public string SpotifyRefreshToken { get; set; } = "";
+        public string SpotifyUser { get; set; } = "";
+        public bool SpotifyPremium { get; set; }
         public bool AutoUpdate { get; set; } = true;
 
         public static string Folder

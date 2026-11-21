@@ -274,6 +274,16 @@ namespace IslandPlayer
             SetPage(_pages[i].build());
         }
 
+        /// <summary>Przebudowuje obecną stronę w tym samym miejscu przewinięcia (np. po połączeniu ze Spotify).</summary>
+        private void RefreshPage()
+        {
+            double off = _scroll.VerticalOffset;
+            var page = _pages[_lastPage].build();
+            page.Margin = new Thickness(0, 0, 0, 24);
+            _scroll.Content = page;
+            Dispatcher.BeginInvoke(new Action(() => _scroll.ScrollToVerticalOffset(off)), System.Windows.Threading.DispatcherPriority.Loaded);
+        }
+
         private void SetPage(StackPanel page)
         {
             page.Margin = new Thickness(0, 0, 0, 24);
@@ -528,6 +538,9 @@ namespace IslandPlayer
             link.Children.Add(copy);
             g.Children.Add(link);
 
+            // ---- Spotify ----
+            SpotifyGroup(p);
+
             // ---- Discord ----
             var d = Group(p, "DISCORD");
             Toggle(d, L.T("Przycisk „Dołącz do Discorda”", "“Join our Discord” button"),
@@ -781,6 +794,82 @@ namespace IslandPlayer
         }
 
         /// <summary>Szklana grupa z opcjonalnym nagłówkiem; zwraca panel na wiersze.</summary>
+        /// <summary>
+        /// Połączenie ze Spotify: z kontem Premium szybkie wyszukiwanie włącza całe piosenki w tle.
+        /// Bez wbudowanego Client ID pokazujemy pole na własny (z developer.spotify.com).
+        /// </summary>
+        private void SpotifyGroup(StackPanel page)
+        {
+            var c = App.Config;
+            var g = Group(page, "SPOTIFY");
+            var row = new Grid { Margin = new Thickness(18, 12, 16, 12) };
+            string sub;
+            if (SpotifyService.CanPlay)
+                sub = L.T("Połączono", "Connected") + (SpotifyService.UserName.Length > 0 ? ": " + SpotifyService.UserName : "") +
+                      L.T(" (Premium) – szybkie wyszukiwanie włącza całe piosenki od razu", " (Premium) – quick search plays full songs instantly");
+            else if (SpotifyService.Connected)
+                sub = L.T("Połączono, ale konto nie ma Premium – Spotify pozwala sterować odtwarzaniem tylko z Premium, więc grają 30-sekundowe fragmenty",
+                          "Connected, but the account isn't Premium – Spotify only allows playback control with Premium, so 30 s previews play");
+            else
+                sub = L.T("Z kontem Premium piosenki z szybkiego wyszukiwania grają w całości, bez przełączania okna. Bez połączenia – 30-sekundowe fragmenty.",
+                          "With Premium, songs from quick search play in full without switching windows. Without it – 30 s previews.");
+            var labels = Labels(L.T("Połącz ze Spotify", "Connect Spotify"), sub);
+            labels.Margin = new Thickness(0, 0, 150, 0);
+            row.Children.Add(labels);
+            var btn = PillButton(SpotifyService.Connected ? L.T("Rozłącz", "Disconnect") : L.T("Połącz", "Connect"), !SpotifyService.Connected);
+            btn.HorizontalAlignment = HorizontalAlignment.Right;
+            btn.VerticalAlignment = VerticalAlignment.Center;
+            bool busy = false;
+            btn.MouseLeftButtonUp += async (s, e) =>
+            {
+                if (busy) return;
+                if (SpotifyService.Connected) { SpotifyService.Disconnect(); RefreshPage(); return; }
+                busy = true;
+                ((TextBlock)btn.Child).Text = L.T("Zaloguj się w przeglądarce…", "Sign in in your browser…");
+                string err = await SpotifyService.ConnectAsync();
+                busy = false;
+                if (err != null) MessageBox.Show(this, err, "Spotify", MessageBoxButton.OK, MessageBoxImage.Warning);
+                RefreshPage();
+            };
+            row.Children.Add(btn);
+            AddRow(g, row);
+
+            if (SpotifyService.DefaultClientId.Length == 0)
+            {
+                // własny Client ID - dopóki autor nie wbuduje go w aplikację
+                var idRow = new StackPanel { Margin = new Thickness(18, 10, 16, 14) };
+                idRow.Children.Add(new TextBlock { Text = "Client ID", FontSize = 14, FontWeight = FontWeights.SemiBold });
+                idRow.Children.Add(new TextBlock
+                {
+                    Text = L.T("developer.spotify.com → Dashboard → Create app → Redirect URI: ", "developer.spotify.com → Dashboard → Create app → Redirect URI: ") + SpotifyService.RedirectUri +
+                           L.T(", zaznacz Web API → skopiuj Client ID tutaj", ", tick Web API → copy the Client ID here"),
+                    FontSize = 12, Foreground = TextSub, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 8),
+                });
+                var box = new TextBox
+                {
+                    Text = c.SpotifyClientId ?? "", FontSize = 13, FontFamily = new FontFamily("Cascadia Mono, Consolas"), Foreground = Brushes.White,
+                    Background = Hex("#14FFFFFF"), BorderBrush = Hairline, BorderThickness = new Thickness(1), Padding = new Thickness(10, 6, 10, 6),
+                    CaretBrush = Brushes.White,
+                };
+                box.LostFocus += (s, e) =>
+                {
+                    string v = box.Text.Trim();
+                    if (v == (c.SpotifyClientId ?? "")) return;
+                    c.SpotifyClientId = v;
+                    if (SpotifyService.Connected) SpotifyService.Disconnect();     // inny Client ID = trzeba zalogować się od nowa
+                    c.Save();
+                };
+                idRow.Children.Add(box);
+                var open = new TextBlock { Text = L.T("Otwórz developer.spotify.com ↗", "Open developer.spotify.com ↗"), FontSize = 12, Foreground = _accentBrush, Cursor = Cursors.Hand, Margin = new Thickness(0, 8, 0, 0) };
+                open.MouseLeftButtonUp += (s, e) =>
+                {
+                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://developer.spotify.com/dashboard") { UseShellExecute = true }); } catch { }
+                };
+                idRow.Children.Add(open);
+                AddRow(g, idRow);
+            }
+        }
+
         private static StackPanel Group(StackPanel page, string header)
         {
             if (header != null)

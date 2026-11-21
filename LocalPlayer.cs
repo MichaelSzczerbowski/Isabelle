@@ -82,6 +82,7 @@ namespace IslandPlayer
             CurrentStation = null;
             StreamTitle = null;
             _radioItem = null;
+            PlayingPreview = false;
             var list = new MediaPlaybackList { AutoRepeatEnabled = false, ShuffleEnabled = shuffle, MaxPlayedItemsToKeepOpen = 2 };
             _tracks.Clear();
             MediaPlaybackItem startItem = null;
@@ -262,6 +263,76 @@ namespace IslandPlayer
         private static LiveRadioStream _pendingLive;     // jeszcze zbiera zapas przed startem
         public static int StreamReconnects => _live?.Reconnects ?? 0;
 
+        // ================= 30-sekundowe fragmenty (szybkie wyszukiwanie bez Spotify Premium) =================
+        private static readonly System.Net.Http.HttpClient PreviewHttp = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(4) };
+        /// <summary>Gra fragment piosenki z internetu (nie z biblioteki i nie radio).</summary>
+        public static bool PlayingPreview { get; private set; }
+
+        public static async void PlayPreview(string title, string artist, string previewUrl, string artUrl)
+        {
+            if (string.IsNullOrWhiteSpace(previewUrl)) return;
+            var ui = System.Windows.Application.Current?.Dispatcher;
+            if (ui != null && !ui.CheckAccess()) { ui.BeginInvoke(new Action(() => PlayPreview(title, artist, previewUrl, artUrl))); return; }
+            try
+            {
+                HookSession();
+                SaveGain();
+                StopLeveler();
+                StopLive();
+                _radioToken++;
+                int token = _radioToken;
+                _icy.Stop();
+                lock (_wrapped) _wrapped.Clear();
+                CurrentStation = null;
+                StreamTitle = null;
+                _radioItem = null;
+                _list = null;
+                _tracks.Clear();
+                CurrentTrack = null;
+                PlayingPreview = true;
+                NowPlaying = artist + " – " + title;
+                Changed?.Invoke();
+
+                var item = new MediaPlaybackItem(MediaSource.CreateFromUri(new Uri(previewUrl)));
+                var props = item.GetDisplayProperties();
+                props.Type = MediaPlaybackType.Music;
+                props.MusicProperties.Title = title;
+                props.MusicProperties.Artist = artist + " · " + L.T("fragment 30 s", "30 s preview");
+                // okładka do pliku zanim zacznie grać - wyspa czyta ją z innego procesu i od razu ją ma
+                string cover = await DownloadPreviewCover(artUrl);
+                if (token != _radioToken) return;      // w międzyczasie włączono coś innego
+                if (cover != null)
+                {
+                    try { props.Thumbnail = RandomAccessStreamReference.CreateFromFile(await StorageFile.GetFileFromPathAsync(cover)); } catch { }
+                }
+                item.ApplyDisplayProperties(props);
+                Player.Source = item;
+                Player.Volume = UserVolume;
+                Player.Play();
+            }
+            catch (Exception ex) { Log.Error(ex); }
+        }
+
+        private static async Task<string> DownloadPreviewCover(string url)
+        {
+            if (string.IsNullOrWhiteSpace(url)) return null;
+            try
+            {
+                // większa okładka z katalogu (100x100 → 600x600)
+                url = url.Replace("100x100bb", "600x600bb");
+                string dir = System.IO.Path.Combine(Settings.Folder, "covers");
+                System.IO.Directory.CreateDirectory(dir);
+                string file = System.IO.Path.Combine(dir, "preview-" + ((uint)url.GetHashCode()).ToString("x8") + ".jpg");
+                if (!System.IO.File.Exists(file))
+                {
+                    byte[] data = await PreviewHttp.GetByteArrayAsync(url);
+                    await System.IO.File.WriteAllBytesAsync(file, data);
+                }
+                return file;
+            }
+            catch { return null; }
+        }
+
         public static void PlayStation(RadioStation st)
         {
             if (st == null || string.IsNullOrWhiteSpace(st.Url)) return;
@@ -285,6 +356,7 @@ namespace IslandPlayer
             _triedUrls.Add(st.Url);
             CurrentStation = st;
             CurrentTrack = null;
+            PlayingPreview = false;
             StreamTitle = null;
             ConnectSeconds = 0;
             Dropouts = 0;

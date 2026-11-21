@@ -65,6 +65,9 @@ namespace IslandPlayer
             public RadioStation Station;
             public string Smart;
             public string ArtUrl;          // okładka z internetu (utwory ze Spotify / sieci)
+            public string Artist;          // wykonawca utworu z sieci
+            public string SpotifyUri;      // połączone Spotify Premium - cała piosenka od razu
+            public string PreviewUrl;      // bez Premium - 30-sekundowy fragment w Isabelle
             public Border Row;
             public Border Art;
             public TextBlock Enter;
@@ -218,14 +221,14 @@ namespace IslandPlayer
 
         /// <summary>Utwory z internetu (katalog iTunes - te same piosenki są w Spotify i na YouTube).</summary>
         // ostatnie wyniki z sieci - cofnięcie litery albo ponowne wpisanie pokazuje je od razu
-        private static readonly Dictionary<string, List<(string title, string artist, string art)>> SongCache =
-            new Dictionary<string, List<(string, string, string)>>(StringComparer.OrdinalIgnoreCase);
+        private static readonly Dictionary<string, List<Result>> SongCache = new Dictionary<string, List<Result>>(StringComparer.OrdinalIgnoreCase);
 
-        private static List<Result> SongResults(List<(string title, string artist, string art)> data)
-        {
-            string where = HasSpotify ? "Spotify" : "YouTube Music";
-            return data.Select(d => new Result { Kind = "web", Title = d.title, Subtitle = d.artist + " · " + where, ArtUrl = d.art }).ToList();
-        }
+        private static List<Result> CloneResults(List<Result> data) =>
+            data.Select(d => new Result
+            {
+                Kind = d.Kind, Title = d.Title, Subtitle = d.Subtitle, Artist = d.Artist, ArtUrl = d.ArtUrl,
+                SpotifyUri = d.SpotifyUri, PreviewUrl = d.PreviewUrl,
+            }).ToList();
 
         /// <summary>Połączenie z katalogiem nawiązujemy już przy otwarciu okna - pierwsze wyniki przychodzą szybciej.</summary>
         private static void WarmUp()
@@ -237,31 +240,58 @@ namespace IslandPlayer
             });
         }
 
+        /// <summary>
+        /// Utwory z sieci: z połączonym Spotify Premium - prosto ze Spotify (cała piosenka od razu),
+        /// bez niego - katalog iTunes z 30-sekundowymi fragmentami (te same piosenki co w Spotify i na YouTube).
+        /// </summary>
         private static async Task<List<Result>> OnlineSongs(string q)
         {
-            lock (SongCache) { if (SongCache.TryGetValue(q, out var hit)) return SongResults(hit); }
+            bool spotify = SpotifyService.CanPlay;
+            string cacheKey = (spotify ? "s:" : "i:") + q;
+            lock (SongCache) { if (SongCache.TryGetValue(cacheKey, out var hit)) return CloneResults(hit); }
             var list = new List<Result>();
-            string url = "https://itunes.apple.com/search?media=music&entity=song&limit=6&term=" + Uri.EscapeDataString(q);
-            using var doc = System.Text.Json.JsonDocument.Parse(await Http.GetStringAsync(url));
-            if (!doc.RootElement.TryGetProperty("results", out var arr)) return list;
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            string where = HasSpotify ? "Spotify" : "YouTube Music";
-            foreach (var it in arr.EnumerateArray())
+            if (spotify)
             {
-                string title = it.TryGetProperty("trackName", out var tn) ? tn.GetString() : null;
-                string artist = it.TryGetProperty("artistName", out var an) ? an.GetString() : null;
-                if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(artist) || !seen.Add(artist + "|" + title)) continue;
-                string art = it.TryGetProperty("artworkUrl100", out var au) ? au.GetString() : null;
-                list.Add(new Result { Kind = "web", Title = title, Subtitle = artist + " · " + where, ArtUrl = art });
-                if (list.Count >= 3) break;
+                foreach (var t in await SpotifyService.SearchAsync(q, 3))
+                    list.Add(new Result { Kind = "web", Title = t.Title, Artist = t.Artist, Subtitle = t.Artist + " · Spotify", ArtUrl = t.Art, SpotifyUri = t.Uri });
             }
-            var data = list.Select(r => (r.Title, r.Subtitle.Split(" · ")[0], r.ArtUrl)).ToList();
+            else
+            {
+                string url = "https://itunes.apple.com/search?media=music&entity=song&limit=6&term=" + Uri.EscapeDataString(q);
+                using var doc = System.Text.Json.JsonDocument.Parse(await Http.GetStringAsync(url));
+                if (doc.RootElement.TryGetProperty("results", out var arr))
+                {
+                    var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var it in arr.EnumerateArray())
+                    {
+                        string title = it.TryGetProperty("trackName", out var tn) ? tn.GetString() : null;
+                        string artist = it.TryGetProperty("artistName", out var an) ? an.GetString() : null;
+                        if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(artist) || !seen.Add(artist + "|" + title)) continue;
+                        string art = it.TryGetProperty("artworkUrl100", out var au) ? au.GetString() : null;
+                        string preview = it.TryGetProperty("previewUrl", out var pu) ? pu.GetString() : null;
+                        list.Add(new Result
+                        {
+                            Kind = "web", Title = title, Artist = artist, ArtUrl = art, PreviewUrl = preview,
+                            Subtitle = artist + (preview != null ? " · " + L.T("fragment 30 s", "30 s preview") : ""),
+                        });
+                        if (list.Count >= 3) break;
+                    }
+                }
+            }
             lock (SongCache)
             {
                 if (SongCache.Count > 200) SongCache.Clear();
-                SongCache[q] = data;
+                SongCache[cacheKey] = CloneResults(list);
             }
             return list;
+        }
+
+        /// <summary>Cała piosenka w Spotify / YouTube Music (przycisk obok fragmentu).</summary>
+        private static void OpenFull(Result r)
+        {
+            string term = Uri.EscapeDataString(r.Artist + " " + r.Title);
+            string link = HasSpotify ? "spotify:search:" + term : "https://music.youtube.com/search?q=" + term;
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(link) { UseShellExecute = true }); } catch { }
         }
 
         private void SafeClose()
@@ -347,7 +377,7 @@ namespace IslandPlayer
                     if (at < 0) at = list.Count;
                     foreach (var song in songs)
                     {
-                        if (local.Contains(song.Subtitle.Split(" · ")[0] + "|" + song.Title)) continue;
+                        if (local.Contains(song.Artist + "|" + song.Title)) continue;
                         list.Insert(at++, song);
                     }
                     if (songs.Count > 0) ShowResults(list, keepSelection: true);
@@ -466,9 +496,27 @@ namespace IslandPlayer
             Grid.SetColumn(texts, 1);
             g.Children.Add(texts);
 
+            var right = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            if (r.Kind == "web" && r.SpotifyUri == null)
+            {
+                // fragment gra w Isabelle - całą piosenkę otwiera mały przycisk
+                var full = new Border
+                {
+                    CornerRadius = new CornerRadius(10), Padding = new Thickness(9, 3, 9, 4), Background = Hex("#1FFFFFFF"), Cursor = Cursors.Hand,
+                    VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0),
+                    ToolTip = L.T("Cała piosenka", "Full song"),
+                    Child = new TextBlock { Text = (HasSpotify ? "Spotify" : "YouTube") + " ↗", FontSize = 11, Foreground = Hex("#CCFFFFFF") },
+                };
+                full.MouseEnter += (s, e) => full.Background = Hex("#33FFFFFF");
+                full.MouseLeave += (s, e) => full.Background = Hex("#1FFFFFFF");
+                full.MouseLeftButtonDown += (s, e) => e.Handled = true;
+                full.MouseLeftButtonUp += (s, e) => { e.Handled = true; OpenFull(r); SafeClose(); };
+                right.Children.Add(full);
+            }
             var enter = new TextBlock { Text = "↵", FontSize = 13, Foreground = Hex("#66FFFFFF"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 2, 0), Opacity = 0 };
-            Grid.SetColumn(enter, 2);
-            g.Children.Add(enter);
+            right.Children.Add(enter);
+            Grid.SetColumn(right, 2);
+            g.Children.Add(right);
             r.Enter = enter;
 
             var row = new Border { Child = g, CornerRadius = new CornerRadius(15), Padding = new Thickness(7, 6, 10, 6), Background = Brushes.Transparent, Cursor = Cursors.Hand };
@@ -557,11 +605,9 @@ namespace IslandPlayer
                         LocalPlayer.PlayStation(r.Station);
                         break;
                     case "web":
-                        // Spotify otwiera się od razu na tej piosence (wyszukiwanie), bez Spotify - YouTube Music
-                        string who = (r.Subtitle ?? "").Split(" · ")[0];
-                        string term = Uri.EscapeDataString(who + " " + r.Title);
-                        string link = HasSpotify ? "spotify:search:" + term : "https://music.youtube.com/search?q=" + term;
-                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(link) { UseShellExecute = true });
+                        if (r.SpotifyUri != null) _ = PlaySpotify(r);                                  // cała piosenka w tle
+                        else if (r.PreviewUrl != null) LocalPlayer.PlayPreview(r.Title, r.Artist, r.PreviewUrl, r.ArtUrl);
+                        else OpenFull(r);
                         break;
                     case "smart":
                         var lib = LibraryService.Tracks.ToList();
@@ -572,6 +618,14 @@ namespace IslandPlayer
             }
             catch (Exception ex) { Log.Error(ex); }
             SafeClose();
+        }
+
+        private static async Task PlaySpotify(Result r)
+        {
+            string err = await SpotifyService.PlayAsync(r.SpotifyUri);
+            if (err == null) return;
+            Log.Info("spotify: " + err);
+            OpenFull(r);       // nie wyszło (np. brak Spotify) - otwieramy jak dawniej
         }
 
         private static SolidColorBrush Hex(string hex)
