@@ -264,7 +264,7 @@ namespace IslandPlayer
             if (string.IsNullOrWhiteSpace(b)) return false;
             try
             {
-                string fa = System.IO.Path.GetFullPath(a).TrimEnd('\') + "\", fb = System.IO.Path.GetFullPath(b).TrimEnd('\') + "\";
+                string fa = System.IO.Path.GetFullPath(a).TrimEnd('\\') + "\\", fb = System.IO.Path.GetFullPath(b).TrimEnd('\\') + "\\";
                 return fa.StartsWith(fb, StringComparison.OrdinalIgnoreCase);
             }
             catch { return false; }
