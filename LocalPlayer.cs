@@ -40,6 +40,7 @@ namespace IslandPlayer
                 };
                 _player.CommandManager.IsEnabled = true;     // pauza / następny / przewijanie z wyspy i klawiszy
                 _player.Volume = UserVolume;
+                _player.MediaEnded += (s, e) => _listEnded = true;      // koniec całej listy (tryb imprezy wraca do poprzedniego odtwarzacza)
                 _player.MediaOpened += (s, e) =>
                 {
                     // po przeładowaniu (włączenie korektora) wracamy w to samo miejsce utworu
@@ -111,6 +112,16 @@ namespace IslandPlayer
                 list.SetShuffledItems(order);
             }
             _queuedAhead++;
+        }
+
+        private static volatile bool _listEnded;
+
+        /// <summary>Czy lista skończyła się sama od ostatniego sprawdzenia (i kasuje znacznik).</summary>
+        public static bool ConsumeListEnded()
+        {
+            bool e = _listEnded;
+            _listEnded = false;
+            return e;
         }
 
         private static double _pendingSeek;

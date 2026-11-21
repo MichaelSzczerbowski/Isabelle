@@ -696,6 +696,7 @@ namespace IslandPlayer
         public void Next() => _media.Next();
         /// <summary>Pauzuje konkretny odtwarzacz (np. Spotify) - tryb imprezy.</summary>
         public void PauseApp(string appId) => _media.PauseApp(appId);
+        public void PlayApp(string appId) => _media.PlayApp(appId);
         public void Previous() => _media.Previous();
         public void SeekTo(double seconds)
         {

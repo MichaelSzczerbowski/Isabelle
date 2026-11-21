@@ -275,7 +275,7 @@ namespace IslandPlayer
                 {
                     PendingItem head;
                     lock (Lock) head = Pending.Count > 0 ? Pending[0] : null;
-                    if (head == null) { _waitKey = null; return; }
+                    if (head == null) { _waitKey = null; CheckPartyEnd(); return; }
 
                     var island = App.Island;
                     var snap = island?.Snapshot;
@@ -308,14 +308,73 @@ namespace IslandPlayer
             _waitKey = null;
         }
 
+        // ---- powrót po kolejce imprezy: odtwarzacz przerwany przez gości gra dalej swoje ----
+        private static string _resumeApp;        // przerwany odtwarzacz (AppId)
+        private static string _partyPlayer;      // "own" / "spotify" - gdzie grają piosenki gości
+        private static bool _spSeenPlaying;
+        private static double _spLastLeft = 999;
+        private static DateTime _spStoppedAt = DateTime.MaxValue;
+
+        /// <summary>Kolejka gości się skończyła - wznawiamy to, co grało przed imprezą (np. Spotify gra dalej swoje).</summary>
+        private static void CheckPartyEnd()
+        {
+            if (_resumeApp == null || _partyPlayer == null) return;
+            var snap = App.Island?.Snapshot;
+            bool playing = App.Island?.Playing == true;
+            string app = (snap?.AppId ?? "").ToLowerInvariant();
+            bool ended = false;
+            if (_partyPlayer == "own")
+            {
+                ended = LocalPlayer.ConsumeListEnded();
+                // zapasowo: nasz odtwarzacz stoi na samym końcu ostatniej piosenki
+                if (!ended && !playing && app.Contains("isabelle") && snap.Duration > 0 && snap.Duration - snap.PositionNow(DateTime.UtcNow) <= 2) ended = true;
+                // ktoś ręcznie włączył inny odtwarzacz - nie wtrącamy się
+                if (!ended && playing && !app.Contains("isabelle")) { ClearResume(); return; }
+            }
+            else
+            {
+                if (playing && app.Contains("spotify"))
+                {
+                    _spSeenPlaying = true;
+                    _spStoppedAt = DateTime.MaxValue;
+                    if (snap.Duration > 0) _spLastLeft = snap.Duration - snap.PositionNow(DateTime.UtcNow);
+                }
+                else if (playing) { ClearResume(); return; }
+                else if (_spSeenPlaying)
+                {
+                    if (_spStoppedAt == DateTime.MaxValue) _spStoppedAt = DateTime.UtcNow;
+                    // zatrzymał się sam na końcu piosenki (nie pauza w połowie)
+                    ended = _spLastLeft <= 4 && (DateTime.UtcNow - _spStoppedAt).TotalSeconds > 1.5;
+                }
+            }
+            if (!ended) return;
+            string resume = _resumeApp;
+            ClearResume();
+            if (resume.IndexOf("isabelle", StringComparison.OrdinalIgnoreCase) >= 0) { if (!LocalPlayer.IsPlaying) LocalPlayer.TogglePause(); }
+            else App.Island?.PlayApp(resume);
+        }
+
+        private static void ClearResume()
+        {
+            _resumeApp = null;
+            _partyPlayer = null;
+            _spSeenPlaying = false;
+            _spLastLeft = 999;
+            _spStoppedAt = DateTime.MaxValue;
+        }
+
         /// <summary>Włącza piosenkę gościa (najpierw zatrzymuje to, co grało).</summary>
         private static void StartNow(PendingItem it, MediaSnapshot current)
         {
             _cooldownUntil = DateTime.UtcNow.AddSeconds(4);       // wyspa musi zauważyć nową piosenkę
+            string target = it.Track != null ? "own" : "spotify";
             if (current != null)
             {
                 string app = current.AppId ?? "";
                 bool ownIsPlaying = app.IndexOf("Isabelle", StringComparison.OrdinalIgnoreCase) >= 0;
+                bool same = target == "own" ? ownIsPlaying : app.IndexOf("spotify", StringComparison.OrdinalIgnoreCase) >= 0;
+                // zapamiętujemy pierwszy przerwany odtwarzacz - po kolejce gości wróci do grania
+                if (!same && _resumeApp == null && App.Island?.Playing == true) _resumeApp = app;
                 // ten sam odtwarzacz i tak przełączy utwór - pauzujemy tylko „obcy”
                 if (it.Track != null && !ownIsPlaying) App.Island?.PauseApp(app);
                 if (it.Uri != null && app.IndexOf("spotify", StringComparison.OrdinalIgnoreCase) < 0)
@@ -324,8 +383,14 @@ namespace IslandPlayer
                     else App.Island?.PauseApp(app);
                 }
             }
+            _partyPlayer = target;
+            _spSeenPlaying = false;
+            _spLastLeft = 999;
+            _spStoppedAt = DateTime.MaxValue;
+            LocalPlayer.ConsumeListEnded();
             if (it.Track != null) LocalPlayer.PlayTracks(new[] { it.Track }, 0, false);
-            else if (it.Uri != null) _ = SpotifyService.PlayAsync(it.Uri);
+            // przez kolejkę Spotify - po piosence gościa Spotify gra dalej swoją playlistę
+            else if (it.Uri != null) _ = SpotifyService.PlayNextAsync(it.Uri);
         }
 
         // ================= pomocnicze =================

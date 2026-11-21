@@ -387,6 +387,30 @@ namespace IslandPlayer
             }
         }
 
+        /// <summary>
+        /// Włącza utwór od razu, ale przez kolejkę (dodaj + następny), więc potem Spotify wraca do swojej playlisty.
+        /// Gdy Spotify nie jest aktywny - zwykłe włączenie.
+        /// </summary>
+        public static async Task<string> PlayNextAsync(string uri)
+        {
+            try
+            {
+                var (status, _) = await Send(HttpMethod.Post, "https://api.spotify.com/v1/me/player/queue?uri=" + Uri.EscapeDataString(uri));
+                if (status < 200 || status >= 300) return await PlayAsync(uri);
+                await Task.Delay(300);
+                (status, _) = await Send(HttpMethod.Post, "https://api.spotify.com/v1/me/player/next");
+                if (status < 200 || status >= 300) return await PlayAsync(uri);
+                await Task.Delay(400);
+                await Send(HttpMethod.Put, "https://api.spotify.com/v1/me/player/play");        // gdyby był na pauzie
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex);
+                return ex.Message;
+            }
+        }
+
         private static async Task<string> PickDevice()
         {
             using var doc = await Api(HttpMethod.Get, "https://api.spotify.com/v1/me/player/devices");
