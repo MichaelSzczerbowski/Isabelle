@@ -539,6 +539,20 @@ namespace IslandPlayer
             link.Children.Add(copy);
             g.Children.Add(link);
 
+            // ---- telefon ----
+            var ph = Group(p, L.T("TELEFON", "PHONE"));
+            var phRow = new Grid { Margin = new Thickness(18, 12, 16, 12) };
+            var phLabels = Labels(L.T("Isabelle w telefonie", "Isabelle on your phone"),
+                L.T("pilot, tekst piosenki, biblioteka w telefonie, Wrapped i impreza – zeskanuj kod QR", "remote, lyrics, your library on the phone, Wrapped and party – scan a QR code"));
+            phLabels.Margin = new Thickness(0, 0, 120, 0);
+            phRow.Children.Add(phLabels);
+            var phBtn = PillButton(L.T("Otwórz", "Open"), true);
+            phBtn.HorizontalAlignment = HorizontalAlignment.Right;
+            phBtn.VerticalAlignment = VerticalAlignment.Center;
+            phBtn.MouseLeftButtonUp += (s, e) => CompanionWindow.ShowWindow();
+            phRow.Children.Add(phBtn);
+            AddRow(ph, phRow);
+
             // ---- nowości ----
             var nr = Group(p, L.T("NOWOŚCI", "NEW RELEASES"));
             Toggle(nr, L.T("Nowości od Twoich artystów", "New from your artists"),

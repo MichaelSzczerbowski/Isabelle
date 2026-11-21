@@ -688,6 +688,12 @@ namespace IslandPlayer
         public string LyricsKey => _lyricsKey;
         public double Position => DisplayPosition();
         public bool Playing => IsPlaying;
+        /// <summary>Głośność tak jak kółkiem na wyspie (aplikacja w telefonie).</summary>
+        public float Volume
+        {
+            get => _audio?.Volume ?? 0;
+            set { if (_audio != null) _audio.Volume = value; }
+        }
         public (double level, double max) AudioLevel => (_peakS, _peakMax);
         public bool MicBusy => _micActive;
         public float ReadPeak() => _audio?.ReadPeak() ?? 0;
@@ -2011,7 +2017,7 @@ namespace IslandPlayer
 
                 // ---- dodatki ----
                 var cfg = App.Config;
-                if (cfg.OverlayEnabled || cfg.DiscordEnabled || PartyServer.Running) PublishState();
+                if (cfg.OverlayEnabled || cfg.DiscordEnabled || PartyServer.Running || CompanionServer.Running) PublishState();
                 if (_slowTicks % 4 == 0)
                 {
                     if (cfg.DiscordEnabled) _discord.Update(OverlayServer.State, cfg.DiscordLyrics);

@@ -23,6 +23,9 @@ namespace IslandPlayer
         public bool NewReleases { get; set; } = true;
         /// <summary>Po końcu playlisty w Mojej muzyce graj podobne piosenki.</summary>
         public bool Autoplay { get; set; } = true;
+        /// <summary>Isabelle w telefonie (aplikacja webowa w domowym Wi-Fi).</summary>
+        public bool CompanionEnabled { get; set; }
+        public string CompanionKey { get; set; } = "";
         /// <summary>Powiadomienia o koncertach najczęściej słuchanych wykonawców (Ticketmaster).</summary>
         public bool Concerts { get; set; } = true;
         public string TicketmasterKey { get; set; } = "";

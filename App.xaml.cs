@@ -88,6 +88,7 @@ namespace IslandPlayer
             Equalizer.Load();
             LibraryService.StartWatching();
             NewReleases.Start();
+            if (Config.CompanionEnabled) CompanionServer.Start();       // Isabelle w telefonie
             PodcastService.Prefetch();      // subskrypcje i popularne gotowe, zanim otworzysz zakładkę
 
             UpdateService.Found += info => Current.Dispatcher.BeginInvoke(new Action(() => _tray?.ShowUpdate(info)));
@@ -217,6 +218,7 @@ namespace IslandPlayer
             try { LocalPlayer.Dispose(); } catch { }
             try { ListeningHistory.Save(); } catch { }
             try { PartyServer.Stop(); } catch { }
+            try { CompanionServer.Stop(); } catch { }
             base.OnExit(e);
         }
     }

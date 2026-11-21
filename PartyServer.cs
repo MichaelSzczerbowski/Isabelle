@@ -156,6 +156,9 @@ namespace IslandPlayer
             return JsonSerializer.Serialize(new { title = s.Title, artist = s.Artist, playing = s.Playing, cover = s.CoverKey, accent = s.Accent });
         }
 
+        /// <summary>Okładka obecnej piosenki jako PNG (też dla aplikacji w telefonie).</summary>
+        public static byte[] CoverPngPublic() => CoverPng();
+
         private static byte[] CoverPng()
         {
             var s = OverlayServer.State;

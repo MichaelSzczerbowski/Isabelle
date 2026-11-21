@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Isabelle">
+<meta name="theme-color" content="#0b0b0d">
+<link rel="apple-touch-icon" href="/icon.png">
+<link rel="icon" href="/icon.png">
+<title>Isabelle</title>
+<style>
+:root{--ac:#ff5ca0;--bg:#0b0b0d;--card:#ffffff0f;--line:#ffffff14;--sub:#ffffff8c}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;overscroll-behavior:none}
+body{padding-top:env(safe-area-inset-top)}
+#bgc{position:fixed;inset:-20%;z-index:-1;background-size:cover;background-position:center;filter:blur(60px) saturate(1.4);opacity:.45;transition:background-image .6s}
+#bgc::after{content:'';position:absolute;inset:0;background:linear-gradient(#0b0b0d55,#0b0b0dee 70%)}
+main{padding:12px 18px calc(96px + env(safe-area-inset-bottom));max-width:560px;margin:0 auto}
+.page{display:none}.page.on{display:block}
+h1{font-size:28px;margin:8px 2px 14px;font-weight:800;letter-spacing:-.4px}
+h2{font-size:15px;color:#ffffffb0;margin:22px 4px 8px;font-weight:650}
+.sub{color:var(--sub);font-size:13px}
+.tabs{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:space-around;padding:8px 8px calc(8px + env(safe-area-inset-bottom));background:#0b0b0dd9;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-top:1px solid var(--line);z-index:5}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;color:#ffffff80;background:none;border:0;padding:4px 0}
+.tab svg{width:24px;height:24px}.tab.on{color:#fff}.tab.on svg{color:var(--ac)}
+.seg{display:flex;background:var(--card);border-radius:14px;padding:3px;gap:3px;margin:6px 0 12px}
+.seg button{flex:1;border:0;background:none;color:#fff;font-size:13px;font-weight:600;padding:8px;border-radius:11px}
+.seg button.on{background:#fff;color:#000}
+/* teraz gra */
+.cover{width:100%;aspect-ratio:1;border-radius:22px;background:#ffffff14 center/cover no-repeat;box-shadow:0 20px 50px #0008;margin:6px 0 20px}
+.tt{font-size:22px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ta{font-size:16px;color:var(--sub);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prog{margin:18px 0 6px;height:22px;display:flex;align-items:center;touch-action:none}
+.bar{position:relative;height:5px;border-radius:3px;background:#ffffff26;flex:1}
+.bar i{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:#fff}
+.times{display:flex;justify-content:space-between;font-size:12px;color:var(--sub);font-variant-numeric:tabular-nums}
+.ctr{display:flex;align-items:center;justify-content:center;gap:34px;margin:14px 0 18px}
+.ctr button{background:none;border:0;color:#fff;padding:6px}
+.ctr svg{width:34px;height:34px}
+.big{width:72px;height:72px;border-radius:36px;background:#fff!important;color:#000!important;display:flex;align-items:center;justify-content:center}
+.big svg{width:30px;height:30px}
+.vol{display:flex;align-items:center;gap:12px;color:var(--sub)}
+.vol svg{width:18px;height:18px;flex:none}
+input[type=range]{flex:1;-webkit-appearance:none;appearance:none;height:5px;border-radius:3px;background:#ffffff26;outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:11px;background:#fff;box-shadow:0 2px 6px #0006}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#fff;background:var(--card);border-radius:12px;padding:5px 10px}
+.lyr{margin-top:22px;background:#00000040;border-radius:22px;padding:18px 18px 22px;max-height:46vh;overflow:auto;scroll-behavior:smooth}
+.lyr p{margin:0 0 12px;font-size:20px;font-weight:750;color:#ffffff4d;transition:color .25s}
+.lyr p.on{color:#fff}
+/* listy */
+.search{width:100%;background:var(--card);border:1px solid var(--line);border-radius:16px;color:#fff;font-size:16px;padding:12px 16px;outline:none}
+.search:focus{border-color:var(--ac)}
+.row{display:flex;align-items:center;gap:12px;padding:8px 4px;border-radius:14px}
+.row:active{background:var(--card)}
+.art{width:48px;height:48px;border-radius:10px;background:#ffffff14 center/cover no-repeat;flex:none;display:flex;align-items:center;justify-content:center;color:#ffffff70;font-size:18px}
+.art.round{border-radius:24px}
+.x{flex:1;min-width:0}
+.t1{font-size:15px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.t2{font-size:13px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.row.cur .t1{color:var(--ac)}
+.btn{border:0;border-radius:20px;background:var(--ac);color:#000;font-weight:700;font-size:15px;padding:12px 18px}
+.btn.ghost{background:var(--card);color:#fff}
+.btns{display:flex;gap:8px;margin:12px 0}
+.card{background:#00000040;border-radius:20px;padding:16px;margin:10px 0}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{background:#00000040;border-radius:18px;padding:14px}
+.stat b{display:block;font-size:26px}
+.stat span{font-size:12px;color:var(--sub)}
+.rk{display:flex;gap:12px;align-items:center;padding:5px 0}
+.rk .n{width:22px;font-weight:800;color:var(--sub)}
+.rk:first-child .n{color:var(--ac)}
+.sbar{height:6px;border-radius:3px;background:#ffffff1f;margin:5px 0 10px}
+.sbar i{display:block;height:100%;border-radius:3px;background:var(--ac)}
+.qr{background:#fff;border-radius:20px;padding:14px;width:240px;margin:12px auto;display:block}
+.empty{color:var(--sub);text-align:center;padding:30px 10px;font-size:14px}
+.back{display:inline-flex;align-items:center;gap:6px;background:var(--card);border:0;color:#fff;border-radius:16px;padding:8px 14px;font-size:14px;margin:4px 0 10px}
+#toast{position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#fff;color:#000;font-weight:700;border-radius:20px;padding:10px 18px;opacity:0;transition:opacity .25s;pointer-events:none;z-index:9;white-space:nowrap}
+.off{background:#ff453a26;color:#ff8a80;border-radius:14px;padding:10px 14px;font-size:13px;margin:8px 0;display:none}
+</style>
+</head>
+<body>
+<div id="bgc"></div>
+<main>
+  <!-- ======= TERAZ GRA ======= -->
+  <section class="page on" id="p-now">
+    <div class="seg" id="mode"><button data-m="pc">Gra na komputerze</button><button data-m="phone">Gra w telefonie</button></div>
+    <div class="off" id="offline">Brak połączenia z komputerem – czy Isabelle jest włączona i telefon jest w tym samym Wi-Fi?</div>
+    <div class="cover" id="cv"></div>
+    <div class="tt" id="tt">–</div>
+    <div class="ta" id="ta"></div>
+    <div style="margin-top:8px"><span class="chip" id="src"></span></div>
+    <div class="prog" id="prog"><div class="bar"><i id="pfill"></i></div></div>
+    <div class="times"><span id="tpos">0:00</span><span id="tdur">0:00</span></div>
+    <div class="ctr">
+      <button id="bprev" aria-label="Poprzedni"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+      <button id="bplay" class="big" aria-label="Pauza"><svg viewBox="0 0 24 24" fill="currentColor" id="iplay"><path d="M7 4l13 8-13 8z"/></svg></button>
+      <button id="bnext" aria-label="Następny"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 5l11 7-11 7z"/></svg></button>
+    </div>
+    <div class="vol" id="volrow"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9v6h4l5 4V5L8 9z"/></svg><input type="range" id="vol" min="0" max="100" value="50"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9v6h4l5 4V5L8 9zm11.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM13 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg></div>
+    <div class="lyr" id="lyr" style="display:none"></div>
+  </section>
+
+  <!-- ======= BIBLIOTEKA ======= -->
+  <section class="page" id="p-lib">
+    <h1>Moja muzyka</h1>
+    <input class="search" id="lq" placeholder="Filtruj bibliotekę" autocomplete="off">
+    <div class="btns"><button class="btn" id="shuf">Losowo</button><span class="sub" id="lcount" style="align-self:center"></span></div>
+    <div id="llist"></div>
+  </section>
+
+  <!-- ======= SZUKAJ ======= -->
+  <section class="page" id="p-search">
+    <h1>Szukaj</h1>
+    <input class="search" id="sq" placeholder="Utwór, stacja, podcast…" autocomplete="off">
+    <div id="sres"></div>
+  </section>
+
+  <!-- ======= WIĘCEJ ======= -->
+  <section class="page" id="p-more">
+    <h1>Więcej</h1>
+    <div class="seg" id="mseg"><button data-v="wrapped" class="on">Wrapped</button><button data-v="party">Impreza</button><button data-v="info">Aplikacja</button></div>
+    <div id="mview"></div>
+  </section>
+</main>
+
+<nav class="tabs">
+  <button class="tab on" data-p="now"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>Teraz</button>
+  <button class="tab" data-p="lib"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>Biblioteka</button>
+  <button class="tab" data-p="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Szukaj</button>
+  <button class="tab" data-p="more"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V12M10 20V4M16 20v-6M22 20H2"/></svg>Więcej</button>
+</nav>
+<div id="toast"></div>
+<audio id="au" preload="auto" playsinline></audio>
+
+<script>
+const K = new URLSearchParams(location.search).get('k') || localStorage.getItem('k') || '';
+localStorage.setItem('k', K);
+const EN = !(navigator.language || '').toLowerCase().startsWith('pl');
+const T = (pl, en) => EN ? en : pl;
+const $ = id => document.getElementById(id);
+const esc = s => (s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const U = (p, q) => p + '?k=' + encodeURIComponent(K) + (q ? '&' + q : '');
+const api = (p, q) => fetch(U(p, q)).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
+const fmt = s => { s = Math.max(0, Math.floor(s || 0)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+function toast(m) { const t = $('toast'); t.textContent = m; t.style.opacity = 1; clearTimeout(toast.h); toast.h = setTimeout(() => t.style.opacity = 0, 2000); }
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+// manifest z kluczem (aplikacja z ekranu głównego otwiera się od razu połączona)
+const ml = document.createElement('link'); ml.rel = 'manifest'; ml.href = '/manifest.json?k=' + encodeURIComponent(K); document.head.appendChild(ml);
+
+// ---------- teksty interfejsu po angielsku ----------
+if (EN) {
+  document.querySelector('#mode [data-m=pc]').textContent = 'Playing on PC';
+  document.querySelector('#mode [data-m=phone]').textContent = 'Playing on phone';
+  $('offline').textContent = "Can't reach your PC – is Isabelle running and the phone on the same Wi-Fi?";
+  document.querySelector('#p-lib h1').textContent = 'My music'; $('lq').placeholder = 'Filter library'; $('shuf').textContent = 'Shuffle';
+  document.querySelector('#p-search h1').textContent = 'Search'; $('sq').placeholder = 'Song, station, podcast…';
+  document.querySelector('#p-more h1').textContent = 'More';
+  document.querySelector('#mseg [data-v=party]').textContent = 'Party'; document.querySelector('#mseg [data-v=info]').textContent = 'App';
+  const names = { now: 'Now', lib: 'Library', search: 'Search', more: 'More' };
+  document.querySelectorAll('.tab').forEach(b => b.lastChild.textContent = names[b.dataset.p]);
+}
+
+// ---------- zakładki ----------
+document.querySelectorAll('.tab').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('.page').forEach(p => p.classList.toggle('on', p.id === 'p-' + b.dataset.p));
+  if (b.dataset.p === 'lib') loadLib();
+  if (b.dataset.p === 'more') renderMore();
+  if (b.dataset.p === 'search' && !$('sq').value) showSubs();
+});
+
+// ---------- tryb: komputer / telefon ----------
+let mode = localStorage.getItem('mode') || 'pc';
+function setMode(m) {
+  mode = m; localStorage.setItem('mode', m);
+  document.querySelectorAll('#mode button').forEach(b => b.classList.toggle('on', b.dataset.m === m));
+  $('lyr').style.display = 'none'; lastLyr = '';
+  if (m === 'pc') { au.pause(); } else { $('offline').style.display = 'none'; }
+  $('volrow').style.display = (m === 'phone' && isIOS) ? 'none' : 'flex';
+  renderPhone();
+}
+document.querySelectorAll('#mode button').forEach(b => b.onclick = () => setMode(b.dataset.m));
+
+// ---------- teraz gra: komputer ----------
+let now = null, nowAt = 0, lastCover = '', lastLyr = '', lyrics = [], volBusy = 0;
+function setAccent(c) { document.documentElement.style.setProperty('--ac', c || '#ff5ca0'); }
+function setCover(url) {
+  $('cv').style.backgroundImage = url ? 'url("' + url + '")' : '';
+  $('bgc').style.backgroundImage = url ? 'url("' + url + '")' : '';
+}
+async function poll() {
+  if (mode !== 'pc') return;
+  try {
+    const n = await api('/api/now');
+    $('offline').style.display = 'none';
+    now = n; nowAt = performance.now();
+    $('tt').textContent = n.title || T('Nic nie gra', 'Nothing playing');
+    $('ta').textContent = n.artist || '';
+    $('src').textContent = n.app || '';
+    $('src').style.display = n.app ? '' : 'none';
+    setAccent(n.accent);
+    if (n.cover !== lastCover) { lastCover = n.cover; setCover(n.cover ? U('/api/cover', 'v=' + encodeURIComponent(n.cover)) : ''); }
+    playIcon(n.playing);
+    if (Date.now() - volBusy > 1500) $('vol').value = n.vol;
+    if (n.lyricsKey !== lastLyr) { lastLyr = n.lyricsKey; loadLyrics(); }
+  } catch (e) { $('offline').style.display = 'block'; }
+}
+function pcPos() { if (!now) return 0; return now.pos + (now.playing ? (performance.now() - nowAt) / 1000 : 0); }
+async function loadLyrics() {
+  try {
+    const l = await api('/api/lyrics');
+    lyrics = l.lines || [];
+    const box = $('lyr');
+    if (!lyrics.length) { box.style.display = 'none'; return; }
+    box.innerHTML = lyrics.map((x, i) => '<p data-i="' + i + '">' + esc(x.text || '♪') + '</p>').join('');
+    box.style.display = 'block';
+    box.querySelectorAll('p').forEach(p => p.onclick = () => cmd('seek', lyrics[+p.dataset.i].t));
+  } catch (e) { }
+}
+let lyrIdx = -1;
+function tick() {
+  let pos, dur;
+  if (mode === 'pc') { pos = Math.min(pcPos(), now ? now.dur || 1e9 : 0); dur = now ? now.dur : 0; }
+  else { pos = au.currentTime || 0; dur = isFinite(au.duration) ? au.duration : 0; }
+  $('tpos').textContent = fmt(pos); $('tdur').textContent = dur ? fmt(dur) : (mode === 'phone' && cur && cur.live ? 'LIVE' : '0:00');
+  $('pfill').style.width = dur ? Math.min(100, pos / dur * 100) + '%' : '0%';
+  if (mode === 'pc' && lyrics.length) {
+    let i = -1; for (let j = 0; j < lyrics.length; j++) { if (lyrics[j].t <= pos + 0.3) i = j; else break; }
+    if (i !== lyrIdx) {
+      lyrIdx = i;
+      const ps = $('lyr').querySelectorAll('p');
+      ps.forEach((p, j) => p.classList.toggle('on', j === i));
+      if (ps[i]) { const box = $('lyr'); box.scrollTop = ps[i].offsetTop - box.offsetTop - box.clientHeight / 2 + 30; }
+    }
+  }
+  requestAnimationFrame(tick);
+}
+function playIcon(playing) { $('iplay').innerHTML = playing ? '<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>' : '<path d="M7 4l13 8-13 8z"/>'; }
+async function cmd(c, v) {
+  try { await api('/api/cmd', 'c=' + c + (v !== undefined ? '&v=' + v : '')); } catch (e) { toast(T('Brak połączenia', 'No connection')); }
+  setTimeout(poll, 150);
+}
+$('bplay').onclick = () => {
+  if (mode === 'pc') { if (now) { now.playing = !now.playing; now.pos = pcPos(); nowAt = performance.now(); playIcon(now.playing); } cmd('toggle'); }
+  else { if (!au.src) return; au.paused ? au.play() : au.pause(); }
+};
+$('bnext').onclick = () => mode === 'pc' ? cmd('next') : phoneNext(1);
+$('bprev').onclick = () => mode === 'pc' ? cmd('prev') : phoneNext(-1);
+$('vol').oninput = e => {
+  volBusy = Date.now();
+  if (mode === 'pc') { clearTimeout($('vol').h); $('vol').h = setTimeout(() => cmd('vol', e.target.value), 80); }
+  else au.volume = e.target.value / 100;
+};
+// przewijanie: dotknij / przeciągnij pasek
+(() => {
+  const el = $('prog'); let drag = false;
+  const at = ev => { const r = el.querySelector('.bar').getBoundingClientRect(); return Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width)); };
+  const go = f => {
+    if (mode === 'pc') { if (now && now.dur) { now.pos = f * now.dur; nowAt = performance.now(); cmd('seek', (f * now.dur).toFixed(1)); } }
+    else if (isFinite(au.duration)) au.currentTime = f * au.duration;
+  };
+  el.addEventListener('pointerdown', e => { drag = true; el.setPointerCapture(e.pointerId); $('pfill').style.width = at(e) * 100 + '%'; });
+  el.addEventListener('pointermove', e => { if (drag) $('pfill').style.width = at(e) * 100 + '%'; });
+  el.addEventListener('pointerup', e => { if (drag) { drag = false; go(at(e)); } });
+})();
+
+// ---------- odtwarzacz w telefonie ----------
+const au = $('au');
+let queue = [], qi = -1, cur = null;
+function playOnPhone(item, list, index) {
+  if (list) { queue = list; qi = index; } else { queue = [item]; qi = 0; }
+  startCur();
+}
+function startCur() {
+  cur = queue[qi]; if (!cur) return;
+  au.src = cur.src;
+  const saved = cur.podKey ? +localStorage.getItem('pos:' + cur.podKey) || 0 : 0;
+  au.onloadedmetadata = () => { if (saved > 5 && saved < au.duration - 30) au.currentTime = saved; };
+  au.play().catch(() => toast(T('Dotknij ▶, aby zagrać', 'Tap ▶ to play')));
+  renderPhone();
+  if ('mediaSession' in navigator) {
+    navigator.mediaSession.metadata = new MediaMetadata({ title: cur.title, artist: cur.artist || '', artwork: cur.art ? [{ src: cur.art, sizes: '512x512' }] : [] });
+  }
+}
+function phoneNext(d) {
+  if (cur && cur.podKey) { au.currentTime = Math.max(0, au.currentTime + (d > 0 ? 30 : -15)); return; }
+  if (d < 0 && au.currentTime > 3) { au.currentTime = 0; return; }
+  if (qi + d >= 0 && qi + d < queue.length) { qi += d; startCur(); }
+}
+au.onended = () => { if (cur && cur.podKey) localStorage.removeItem('pos:' + cur.podKey); phoneNext(1); };
+au.onplay = au.onpause = () => { if (mode === 'phone') playIcon(!au.paused); };
+setInterval(() => { if (cur && cur.podKey && !au.paused) localStorage.setItem('pos:' + cur.podKey, Math.floor(au.currentTime)); }, 5000);
+if ('mediaSession' in navigator) {
+  navigator.mediaSession.setActionHandler('play', () => au.play());
+  navigator.mediaSession.setActionHandler('pause', () => au.pause());
+  navigator.mediaSession.setActionHandler('nexttrack', () => phoneNext(1));
+  navigator.mediaSession.setActionHandler('previoustrack', () => phoneNext(-1));
+}
+function renderPhone() {
+  if (mode !== 'phone') { poll(); return; }
+  $('tt').textContent = cur ? cur.title : T('Wybierz coś z biblioteki', 'Pick something from your library');
+  $('ta').textContent = cur ? cur.artist || '' : T('albo wyszukaj stację lub podcast', 'or search for a station or podcast');
+  $('src').textContent = T('Telefon', 'Phone'); $('src').style.display = '';
+  setCover(cur && cur.art ? cur.art : '');
+  playIcon(!au.paused);
+}
+
+// ---------- biblioteka ----------
+let lib = null;
+async function loadLib() {
+  if (lib) return renderLib();
+  $('llist').innerHTML = '<div class="empty">' + T('Wczytuję…', 'Loading…') + '</div>';
+  try { lib = await api('/api/library'); renderLib(); }
+  catch (e) { $('llist').innerHTML = '<div class="empty">' + T('Brak połączenia z komputerem', "Can't reach your PC") + '</div>'; }
+}
+function libItem(t) { return { title: t.title, artist: t.artist, src: U('/api/stream', 'id=' + t.id), art: t.art ? U('/api/art', 'id=' + t.id) : '', id: t.id }; }
+let shown = [];
+function renderLib() {
+  const q = $('lq').value.trim().toLowerCase();
+  shown = q ? lib.filter(t => (t.title + ' ' + t.artist + ' ' + t.album).toLowerCase().includes(q)) : lib;
+  $('lcount').textContent = shown.length + ' ' + T('utw.', 'tracks');
+  if (!lib.length) { $('llist').innerHTML = '<div class="empty">' + T('Biblioteka jest pusta – dodaj muzykę w Isabelle na komputerze.', 'Your library is empty – add music in Isabelle on your PC.') + '</div>'; return; }
+  $('llist').innerHTML = shown.slice(0, 200).map((t, i) => '<div class="row" data-i="' + i + '"><div class="art"' + (t.art ? ' style="background-image:url(\'' + U('/api/art', 'id=' + t.id) + '\')"' : '') + '>' + (t.art ? '' : '♪') + '</div><div class="x"><div class="t1">' + esc(t.title) + '</div><div class="t2">' + esc(t.artist) + (t.dur ? ' · ' + fmt(t.dur) : '') + '</div></div></div>').join('')
+    + (shown.length > 200 ? '<div class="empty">' + T('Wpisz coś, żeby zobaczyć resztę', 'Type to see the rest') + '</div>' : '');
+  $('llist').querySelectorAll('.row').forEach(r => r.onclick = () => playLib(+r.dataset.i));
+}
+function playLib(i, shuffle) {
+  const t = shown[i];
+  if (mode === 'pc') { api('/api/play', 'id=' + t.id + (shuffle ? '&shuffle=1' : '')).then(() => { toast(T('Gra na komputerze', 'Playing on PC')); setTimeout(poll, 300); }).catch(() => toast(T('Brak połączenia', 'No connection'))); }
+  else {
+    let list = shown.map(libItem);
+    if (shuffle) list = list.sort(() => Math.random() - .5);
+    playOnPhone(null, list, shuffle ? 0 : i);
+  }
+  document.querySelector('.tab[data-p=now]').click();
+}
+$('lq').oninput = () => renderLib();
+$('shuf').onclick = () => { if (shown.length) playLib(Math.floor(Math.random() * shown.length), true); };
+
+// ---------- szukaj ----------
+let sTimer;
+$('sq').oninput = () => { clearTimeout(sTimer); sTimer = setTimeout(search, 350); if (!$('sq').value) showSubs(); };
+function rowHtml(art, t1, t2, attrs, round) {
+  return '<div class="row" ' + attrs + '><div class="art' + (round ? ' round' : '') + '"' + (art ? ' style="background-image:url(\'' + esc(art) + '\')"' : '') + '>' + (art ? '' : '♪') + '</div><div class="x"><div class="t1">' + esc(t1) + '</div><div class="t2">' + esc(t2) + '</div></div></div>';
+}
+let sData = null;
+async function search() {
+  const q = $('sq').value.trim();
+  if (q.length < 2) return;
+  $('sres').innerHTML = '<div class="empty">' + T('Szukam…', 'Searching…') + '</div>';
+  try {
+    const r = sData = await api('/api/search', 'q=' + encodeURIComponent(q));
+    let h = '';
+    if (r.lib && r.lib.length) h += '<h2>' + T('Moja muzyka', 'My music') + '</h2>' + r.lib.map((t, i) => rowHtml(t.art ? U('/api/art', 'id=' + t.id) : '', t.title, t.artist, 'data-k="lib" data-i="' + i + '"')).join('');
+    if (r.spot && r.spot.length && mode === 'pc') h += '<h2>Spotify</h2>' + r.spot.map((t, i) => rowHtml(t.art, t.title, t.sub, 'data-k="spot" data-i="' + i + '"')).join('');
+    if (r.radio && r.radio.length) h += '<h2>Radio</h2>' + r.radio.map((t, i) => rowHtml('', t.title, t.sub, 'data-k="radio" data-i="' + i + '"', true)).join('');
+    if (r.pods && r.pods.length) h += '<h2>' + T('Podcasty', 'Podcasts') + '</h2>' + r.pods.map((t, i) => rowHtml(t.art, t.title, t.sub, 'data-k="pod" data-i="' + i + '"')).join('');
+    $('sres').innerHTML = h || '<div class="empty">' + T('Nic nie znaleziono', 'Nothing found') + '</div>';
+    $('sres').querySelectorAll('.row').forEach(el => el.onclick = () => pick(el.dataset.k, +el.dataset.i));
+  } catch (e) { $('sres').innerHTML = '<div class="empty">' + T('Brak połączenia z komputerem', "Can't reach your PC") + '</div>'; }
+}
+function pick(kind, i) {
+  const r = sData;
+  if (kind === 'lib') {
+    const t = r.lib[i];
+    if (mode === 'pc') api('/api/play', 'id=' + t.id).then(() => toast(T('Gra na komputerze', 'Playing on PC')));
+    else playOnPhone(libItem(t));
+  } else if (kind === 'spot') { api('/api/play', 't=' + r.spot[i].t).then(() => toast(T('Gra w Spotify', 'Playing in Spotify'))); }
+  else if (kind === 'radio') {
+    const s = r.radio[i];
+    if (mode === 'pc') api('/api/play', 't=' + s.t).then(() => toast(T('Radio gra na komputerze', 'Radio playing on PC')));
+    else playOnPhone({ title: s.title, artist: s.sub, src: s.url, art: '', live: true });
+  } else if (kind === 'pod') { openShow(r.pods[i].t); return; }
+  if (kind !== 'pod') { setTimeout(poll, 400); document.querySelector('.tab[data-p=now]').click(); }
+}
+async function showSubs() {
+  try {
+    const subs = await api('/api/podcasts');
+    if ($('sq').value) return;
+    $('sres').innerHTML = subs.length ? '<h2>' + T('Twoje podcasty', 'Your podcasts') + '</h2>' + subs.map((s, i) => rowHtml(s.art, s.title, s.author, 'data-t="' + s.t + '"')).join('') : '';
+    $('sres').querySelectorAll('.row').forEach(el => el.onclick = () => openShow(el.dataset.t));
+  } catch (e) { }
+}
+async function openShow(t) {
+  $('sres').innerHTML = '<div class="empty">' + T('Wczytuję odcinki…', 'Loading episodes…') + '</div>';
+  try {
+    const d = await api('/api/episodes', 't=' + t);
+    let h = '<button class="back" id="sback">‹ ' + T('Wróć', 'Back') + '</button>' + rowHtml(d.show.art, d.show.title, d.show.author, '');
+    h += '<h2>' + T('Odcinki', 'Episodes') + '</h2>' + d.eps.map((e, i) => {
+      const left = e.done ? '✓ ' : (e.pos > 0 && e.dur ? T('zostało ', '') + fmt(e.dur - e.pos) + T('', ' left') + ' · ' : '');
+      return rowHtml(d.show.art, e.title, left + (e.date || '') + (e.dur ? ' · ' + Math.round(e.dur / 60) + ' min' : ''), 'data-i="' + i + '"');
+    }).join('');
+    $('sres').innerHTML = h;
+    $('sback').onclick = () => $('sq').value ? search() : showSubs();
+    $('sres').querySelectorAll('.row[data-i]').forEach(el => el.onclick = () => {
+      const e = d.eps[+el.dataset.i];
+      if (mode === 'pc') api('/api/play', 't=' + e.t).then(() => { toast(T('Podcast gra na komputerze', 'Podcast playing on PC')); setTimeout(poll, 400); });
+      else playOnPhone({ title: e.title, artist: d.show.title, src: e.url, art: d.show.art, podKey: e.t + e.url.length });
+      document.querySelector('.tab[data-p=now]').click();
+    });
+  } catch (e) { $('sres').innerHTML = '<div class="empty">' + T('Nie udało się wczytać odcinków', "Couldn't load episodes") + '</div>'; }
+}
+
+// ---------- więcej: Wrapped / impreza / aplikacja ----------
+let moreView = 'wrapped', period = 'week';
+document.querySelectorAll('#mseg button').forEach(b => b.onclick = () => { moreView = b.dataset.v; document.querySelectorAll('#mseg button').forEach(x => x.classList.toggle('on', x === b)); renderMore(); });
+async function renderMore() {
+  const v = $('mview');
+  if (moreView === 'wrapped') {
+    const ps = [['week', T('7 dni', '7 days')], ['month', T('30 dni', '30 days')], ['year', T('Rok', 'Year')], ['all', T('Od początku', 'All time')]];
+    v.innerHTML = '<div class="seg">' + ps.map(p => '<button data-p="' + p[0] + '" class="' + (p[0] === period ? 'on' : '') + '">' + p[1] + '</button>').join('') + '</div><div id="wbody"><div class="empty">…</div></div>';
+    v.querySelectorAll('.seg button').forEach(b => b.onclick = () => { period = b.dataset.p; renderMore(); });
+    try {
+      const w = await api('/api/wrapped', 'p=' + period);
+      if (!w.plays) { $('wbody').innerHTML = '<div class="empty">' + T('Tu pojawią się Twoje statystyki – utwór liczy się po 30 s grania.', 'Your stats will appear here – a song counts after 30 s.') + '</div>'; return; }
+      let h = '<div class="stats"><div class="stat"><b>' + w.hours + '</b><span>' + T('godzin', 'hours') + '</span></div><div class="stat"><b>' + w.plays + '</b><span>' + T('odsłuchań', 'plays') + '</span></div><div class="stat"><b>' + w.artists + '</b><span>' + T('wykonawców', 'artists') + '</span></div></div>';
+      if (w.topArtists.length) h += '<div class="card"><h2 style="margin-top:0">' + T('Najczęściej słuchani', 'Top artists') + '</h2>' + w.topArtists.map((a, i) => '<div class="rk"><span class="n">' + (i + 1) + '</span><div class="x"><div class="t1">' + esc(a.name) + '</div></div><span class="sub">' + a.count + '×</span></div>').join('') + '</div>';
+      if (w.topTracks.length) h += '<div class="card"><h2 style="margin-top:0">' + T('Ulubione utwory', 'Top tracks') + '</h2>' + w.topTracks.map((t, i) => '<div class="rk"><span class="n">' + (i + 1) + '</span><div class="x"><div class="t1">' + esc(t.title) + '</div><div class="t2">' + esc(t.artist) + '</div></div><span class="sub">' + t.count + '×</span></div>').join('') + '</div>';
+      if (w.sources.length) h += '<div class="card"><h2 style="margin-top:0">' + T('Skąd słuchasz', 'Where you listen') + '</h2>' + w.sources.map(s => '<div style="display:flex;justify-content:space-between"><b style="font-size:14px">' + esc(s.name) + '</b><span class="sub">' + s.share + '%</span></div><div class="sbar"><i style="width:' + Math.max(3, s.share) + '%"></i></div>').join('') + '</div>';
+      $('wbody').innerHTML = h;
+    } catch (e) { $('wbody').innerHTML = '<div class="empty">' + T('Brak połączenia z komputerem', "Can't reach your PC") + '</div>'; }
+  } else if (moreView === 'party') {
+    v.innerHTML = '<div class="empty">…</div>';
+    try {
+      const p = await api('/api/party');
+      let h = '<div class="card"><div class="t1" style="font-size:18px">' + T('Tryb imprezy 🎉', 'Party mode 🎉') + '</div><div class="sub" style="margin-top:4px">' + T('Pokaż kod znajomym – dodają piosenki do kolejki ze swoich telefonów.', 'Show the code to friends – they add songs to the queue from their phones.') + '</div>';
+      if (p.running) {
+        h += '<img class="qr" src="' + U('/api/partyqr', 'v=' + Date.now()) + '"><div class="btns"><button class="btn ghost" id="pstop">' + T('Zakończ imprezę', 'End the party') + '</button></div>';
+        h += '<h2>' + T('Dodane przez gości', 'Added by guests') + '</h2>' + (p.guests.length ? p.guests.map(g => rowHtml('', g.title, g.artist + ' · ' + g.by, '')).join('') : '<div class="sub">' + T('Jeszcze nic', 'Nothing yet') + '</div>');
+      } else h += '<div class="btns"><button class="btn" id="pstart">' + T('Zacznij imprezę', 'Start the party') + '</button></div>';
+      v.innerHTML = h + '</div>';
+      if ($('pstart')) $('pstart').onclick = () => api('/api/party', 'a=start').then(renderMore);
+      if ($('pstop')) $('pstop').onclick = () => api('/api/party', 'a=stop').then(renderMore);
+    } catch (e) { v.innerHTML = '<div class="empty">' + T('Brak połączenia z komputerem', "Can't reach your PC") + '</div>'; }
+  } else {
+    const standalone = window.navigator.standalone || matchMedia('(display-mode: standalone)').matches;
+    v.innerHTML = '<div class="card"><div class="t1" style="font-size:18px">Isabelle</div><div class="sub" style="margin-top:6px">'
+      + (standalone ? T('Aplikacja jest na ekranie głównym 👌', 'The app is on your home screen 👌')
+        : isIOS ? T('Dodaj do ekranu: w Safari dotknij „Udostępnij” (kwadrat ze strzałką) → „Do ekranu początkowego”.', 'Add to home screen: in Safari tap Share → “Add to Home Screen”.')
+          : T('Dodaj do ekranu: w Chrome dotknij ⋮ → „Dodaj do ekranu głównego”.', 'Add to home screen: in Chrome tap ⋮ → “Add to Home screen”.'))
+      + '</div><div class="sub" style="margin-top:10px">' + T('Działa w tym samym Wi-Fi co komputer z włączoną Isabelle. „Gra w telefonie” odtwarza muzykę z komputera na Twoich słuchawkach.', 'Works on the same Wi-Fi as your PC running Isabelle. “Playing on phone” streams music from your PC to your headphones.') + '</div></div>';
+  }
+}
+
+setMode(mode);
+setInterval(poll, 1000);
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>

@@ -29,6 +29,9 @@
   <ItemGroup>
     <!-- klucz publiczny do sprawdzania podpisu aktualizacji (tworzy go build_installer.bat) -->
     <EmbeddedResource Include="keys\public.xml" LogicalName="public.xml" Condition="Exists('keys\public.xml')" />
+    <!-- aplikacja w telefonie (strona podawana przez Isabelle w domowym Wi-Fi) -->
+    <EmbeddedResource Include="companion.html" LogicalName="companion.html" />
+    <EmbeddedResource Include="assets\logo.png" LogicalName="applogo.png" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />

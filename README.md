@@ -29,6 +29,7 @@ A tiny black pill at the top of your screen that shows what's playing and grows 
 | ♾️ | Autoplay similar songs when a playlist ends | Autoplay podobnych piosenek po końcu playlisty |
 | 🎤 | Concerts of your top artists near you (Ticketmaster) | Koncerty najczęściej słuchanych wykonawców w okolicy (Ticketmaster) |
 | 🧹 | Library tidy-up: duplicates, missing tags, messy file names, quality | Porządkowanie biblioteki: duplikaty, brakujące tagi, nazwy plików, jakość |
+| 📱 | **Isabelle on your phone** — scan a QR code: remote, live lyrics, your library streamed to the phone, search, Wrapped and party mode (iPhone and Android, same Wi-Fi) | **Isabelle w telefonie** — zeskanuj kod QR: pilot, tekst na żywo, biblioteka grana w telefonie, wyszukiwanie, Wrapped i impreza (iPhone i Android, to samo Wi-Fi) |
 | 🐞 | Report a bug straight from the app, "What's new" screen after each update | Zgłaszanie błędów z aplikacji, ekran „Co nowego” po aktualizacji |
 | 🖼️ | Real album art (Spotify logo bar removed automatically) | Prawdziwe okładki (pasek z logo Spotify wycinany automatycznie) |
 | 🌈 | Animated blurred album background and glow in the cover's color, like Apple Music | Ruchome, rozmyte tło z okładki i poświata w jej kolorze |

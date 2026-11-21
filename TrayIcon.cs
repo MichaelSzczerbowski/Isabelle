@@ -15,7 +15,7 @@ namespace IslandPlayer
         [DllImport("user32.dll")]
         private static extern bool DestroyIcon(IntPtr handle);
 
-        private readonly WinForms.ToolStripMenuItem _settingsItem, _autoItem, _updateItem, _quitItem, _libraryItem, _bugItem, _wrappedItem, _partyItem;
+        private readonly WinForms.ToolStripMenuItem _settingsItem, _autoItem, _updateItem, _quitItem, _libraryItem, _bugItem, _wrappedItem, _partyItem, _phoneItem;
         private Action _balloonClick;       // co robi kliknięcie dymka (aktualizacja / nowość)
 
         public TrayIcon()
@@ -28,6 +28,7 @@ namespace IslandPlayer
             _bugItem = new WinForms.ToolStripMenuItem("", null, (s, e) => BugReportWindow.ShowWindow());
             _wrappedItem = new WinForms.ToolStripMenuItem("", null, (s, e) => WrappedWindow.ShowWindow());
             _partyItem = new WinForms.ToolStripMenuItem("", null, (s, e) => PartyWindow.ShowWindow());
+            _phoneItem = new WinForms.ToolStripMenuItem("", null, (s, e) => CompanionWindow.ShowWindow());
             _autoItem = new WinForms.ToolStripMenuItem("") { CheckOnClick = true };
             _autoItem.Click += (s, e) => Autostart.Set(_autoItem.Checked);
             _quitItem = new WinForms.ToolStripMenuItem("", null, (s, e) => App.Quit());
@@ -35,6 +36,7 @@ namespace IslandPlayer
             menu.Items.Add(_libraryItem);
             menu.Items.Add(_wrappedItem);
             menu.Items.Add(_partyItem);
+            menu.Items.Add(_phoneItem);
             menu.Items.Add(_settingsItem);
             menu.Items.Add(_autoItem);
             menu.Items.Add(_bugItem);
@@ -68,6 +70,7 @@ namespace IslandPlayer
             _libraryItem.Text = L.T("Moja muzyka i radio", "My music and radio");
             _bugItem.Text = L.T("Zgłoś błąd…", "Report a bug…");
             _wrappedItem.Text = "Isabelle Wrapped";
+            _phoneItem.Text = L.T("Isabelle w telefonie", "Isabelle on your phone");
             _partyItem.Text = PartyServer.Running ? L.T("Tryb imprezy (włączony)", "Party mode (on)") : L.T("Tryb imprezy", "Party mode");
             _autoItem.Text = L.T("Uruchamiaj z Windows", "Start with Windows");
             _autoItem.Checked = Autostart.IsEnabled;
