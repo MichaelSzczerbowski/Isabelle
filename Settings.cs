@@ -13,6 +13,12 @@ namespace IslandPlayer
         // odtwarzacz
         public bool Lyrics { get; set; } = true;
         public bool AlbumBackground { get; set; } = true;
+        /// <summary>Tło rozwiniętej wyspy: cover (rozmyta okładka), liquid (liquid glass w kolorach okładki), none. "" = wg AlbumBackground.</summary>
+        public string IslandBackground { get; set; } = "";
+        [System.Text.Json.Serialization.JsonIgnore]
+        public string IslandBackgroundEffective => !string.IsNullOrEmpty(IslandBackground) ? IslandBackground : AlbumBackground ? "cover" : "none";
+        /// <summary>Przenikanie utworów w Mojej muzyce (sekundy, 0 = wyłączone).</summary>
+        public int Crossfade { get; set; }
         /// <summary>Rozmyta okładka w tle powoli płynie (jak w Apple Music na Macu).</summary>
         public bool AnimatedBackground { get; set; } = true;
         public bool Glow { get; set; } = true;

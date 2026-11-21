@@ -515,11 +515,30 @@ namespace IslandPlayer
             BgCover.Source = bmp;
             BgCover2.Source = bmp;
             SetAccent(accent);
+            if (bmp != null) _glass?.SetColors(bmp, accent);
         }
 
         private Color _coverAccent = Color.FromRgb(30, 215, 96);
 
         /// <summary>Kolor z okładki - użyty, gdy w personalizacji wybrano "Z okładki".</summary>
+        // ---- tło wyspy „liquid glass” (jak w Mojej muzyce) ----
+        private GlassBackground _glass;
+
+        private void ApplyLiquidBackground(bool on, double expOp)
+        {
+            bool show = on && _cover != null && expOp > 0.01;
+            if (show && _glass == null)
+            {
+                _glass = new GlassBackground { AlwaysSmooth = true };
+                _glass.SetColors(_cover, _coverAccent);
+                PillInner.Children.Insert(0, _glass);       // pod całą zawartością wyspy
+            }
+            if (_glass == null) return;
+            var vis = show ? Visibility.Visible : Visibility.Collapsed;      // schowane = nie liczy klatek
+            if (_glass.Visibility != vis) _glass.Visibility = vis;
+            if (show) _glass.Opacity = expOp;
+        }
+
         private void SetAccent(Color c)
         {
             _coverAccent = c;
@@ -1203,7 +1222,9 @@ namespace IslandPlayer
             IdleClock.Visibility = IdleVClock.Visibility = clock ? Visibility.Visible : Visibility.Collapsed;
             IdleDot.Visibility = IdleVDot.Visibility = clock ? Visibility.Collapsed : Visibility.Visible;
 
-            bool bg = App.Config.AlbumBackground && _cover != null;
+            string style = App.Config.IslandBackgroundEffective;
+            bool bg = style == "cover" && _cover != null;
+            ApplyLiquidBackground(style == "liquid", expOp);
             BgCover.Opacity = bg ? expOp * 0.95 : 0;
             if (bg && expOp > 0)
             {

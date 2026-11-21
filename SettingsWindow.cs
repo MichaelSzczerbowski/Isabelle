@@ -379,8 +379,9 @@ namespace IslandPlayer
             var c = App.Config;
             var p = new StackPanel();
             var g = Group(p, null);
-            Toggle(g, L.T("Tło z okładki", "Album background"), L.T("rozmyta okładka za odtwarzaczem", "blurred cover behind the player"),
-                c.AlbumBackground, v => c.AlbumBackground = v);
+            Segment(g, L.T("Tło wyspy", "Island background"), L.T("za odtwarzaczem w rozwiniętej wyspie", "behind the player in the expanded island"),
+                new[] { ("cover", L.T("Okładka", "Cover")), ("liquid", "Liquid glass"), ("none", L.T("Bez tła", "None")) },
+                c.IslandBackgroundEffective, v => { c.IslandBackground = v; c.AlbumBackground = v == "cover"; });
             Toggle(g, L.T("Ruchome tło", "Animated background"), L.T("okładka płynie w tle jak w Apple Music", "the cover flows in the background like Apple Music"),
                 c.AnimatedBackground, v => c.AnimatedBackground = v);
             Toggle(g, L.T("Poświata", "Glow"), L.T("delikatne światło w kolorze okładki", "soft light in the cover's color"), c.Glow, v => c.Glow = v);
@@ -609,6 +610,9 @@ namespace IslandPlayer
                 L.T("koniec utworu łagodnie cichnie, a następny płynnie się rozkręca",
                     "the end of a track fades out gently and the next one fades in"),
                 c.SmoothTransitions, v => c.SmoothTransitions = v);
+            Segment(g, L.T("Przenikanie utworów", "Crossfade"), L.T("w Mojej muzyce koniec piosenki przechodzi płynnie w następną", "in My music the end of a song blends into the next one"),
+                new[] { ("0", L.T("Wył.", "Off")), ("3", "3 s"), ("6", "6 s"), ("9", "9 s"), ("12", "12 s") },
+                c.Crossfade.ToString(), v => c.Crossfade = int.Parse(v));
             Toggle(g, L.T("Tylko głośność muzyki", "Music volume only"),
                 L.T("kółko zmienia głośność odtwarzacza (np. Spotify), a nie całego komputera", "the wheel changes the player's volume (e.g. Spotify), not the whole PC"),
                 c.AppVolume, v => c.AppVolume = v);

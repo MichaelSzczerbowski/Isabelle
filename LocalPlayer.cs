@@ -83,6 +83,8 @@ namespace IslandPlayer
             StreamTitle = null;
             _radioItem = null;
             PlayingPreview = false;
+            StopCrossfade();
+            EnsureCrossfadeWatch();
             var list = new MediaPlaybackList { AutoRepeatEnabled = false, ShuffleEnabled = shuffle, MaxPlayedItemsToKeepOpen = 2 };
             _tracks.Clear();
             MediaPlaybackItem startItem = null;
@@ -263,6 +265,119 @@ namespace IslandPlayer
         private static LiveRadioStream _pendingLive;     // jeszcze zbiera zapas przed startem
         public static int StreamReconnects => _live?.Reconnects ?? 0;
 
+        // ================= przenikanie utworów (crossfade) =================
+        // Kilka sekund przed końcem utworu drugi, „cichy” odtwarzacz przejmuje końcówkę obecnej piosenki i ją wycisza,
+        // a główny odtwarzacz (ten widoczny w wyspie) już gra następną i ją podgłaśnia.
+        private static System.Windows.Threading.DispatcherTimer _xfTimer;
+        private static MediaPlayer _tail;
+        private static bool _fading, _xfStarting;
+        private static DateTime _fadeStart;
+        private static double _fadeLen;
+
+        private static void EnsureCrossfadeWatch()
+        {
+            if (_xfTimer != null) return;
+            _xfTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(80) };
+            _xfTimer.Tick += (s, e) => CrossfadeTick();
+            _xfTimer.Start();
+        }
+
+        private static void CrossfadeTick()
+        {
+            try
+            {
+                if (_fading) { UpdateFade(); return; }
+                int sec = App.Config.Crossfade;
+                if (sec <= 0 || _xfStarting || _player == null || _list == null || CurrentStation != null || PlayingPreview) return;
+                var ses = _player.PlaybackSession;
+                if (ses.PlaybackState != MediaPlaybackState.Playing) return;
+                double dur = ses.NaturalDuration.TotalSeconds, pos = ses.Position.TotalSeconds;
+                if (dur < sec * 2 + 5) return;                    // krótkie utwory bez przenikania
+                double remain = dur - pos;
+                if (remain > sec || remain < 1) return;
+                // czy jest następny utwór (w kolejności - także przy losowaniu)
+                var cur = _list.CurrentItem;
+                if (cur == null) return;
+                var order = _list.ShuffleEnabled ? new List<MediaPlaybackItem>(_list.ShuffledItems) : new List<MediaPlaybackItem>(_list.Items);
+                int idx = -1;
+                for (int i = 0; i < order.Count; i++) if (ReferenceEquals(order[i], cur)) { idx = i; break; }
+                if (!_list.AutoRepeatEnabled && (idx < 0 || idx >= order.Count - 1)) return;
+                var t = CurrentTrack;
+                if (t == null) return;
+                StartCrossfade(t, Math.Min(sec, remain));
+            }
+            catch (Exception ex) { Log.Info("przenikanie: " + ex.Message); StopCrossfade(); }
+        }
+
+        private static void StartCrossfade(LibraryTrack t, double len)
+        {
+            _xfStarting = true;
+            StopTail();
+            var tail = new MediaPlayer { AutoPlay = false, Volume = UserVolume };
+            tail.CommandManager.IsEnabled = false;            // niewidoczny dla wyspy i klawiszy multimedialnych
+            MediaSource src = null;
+            if (Equalizer.Enabled)
+            {
+                var eq = EqStream.TryOpen(t.Path);           // ten sam dźwięk co z korektorem
+                if (eq != null) src = MediaSource.CreateFromStream(System.IO.WindowsRuntimeStreamExtensions.AsRandomAccessStream(eq), "audio/wav");
+            }
+            src ??= MediaSource.CreateFromUri(new Uri(t.Path));
+            tail.MediaOpened += (s, e) =>
+            {
+                try
+                {
+                    // końcówka startuje dokładnie tam, gdzie gra główny odtwarzacz, a ten od razu przechodzi dalej
+                    var main = _player;
+                    if (main == null || !ReferenceEquals(CurrentTrack, t)) { s.Dispose(); _xfStarting = false; return; }
+                    s.PlaybackSession.Position = main.PlaybackSession.Position + TimeSpan.FromMilliseconds(40);
+                    s.Play();
+                    main.Volume = 0;
+                    _list?.MoveNext();
+                    System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        _tail = s;
+                        _fadeStart = DateTime.UtcNow;
+                        _fadeLen = Math.Max(1, len);
+                        _fading = true;
+                        _xfStarting = false;
+                    }));
+                }
+                catch (Exception ex) { Log.Info("przenikanie: " + ex.Message); _xfStarting = false; }
+            };
+            tail.MediaFailed += (s, e) => { _xfStarting = false; try { s.Dispose(); } catch { } };
+            tail.Source = src;
+        }
+
+        private static void UpdateFade()
+        {
+            var main = _player;
+            if (main == null || _tail == null) { StopCrossfade(); return; }
+            // pauza / stop w trakcie przenikania - końcówka znika od razu
+            if (main.PlaybackSession.PlaybackState == MediaPlaybackState.Paused) { StopCrossfade(); return; }
+            double p = Math.Clamp((DateTime.UtcNow - _fadeStart).TotalSeconds / _fadeLen, 0, 1);
+            double v = UserVolume;
+            // równa moc: suma głośności brzmi stale, bez „dołka” w połowie
+            main.Volume = v * Math.Sin(p * Math.PI / 2);
+            _tail.Volume = v * Math.Cos(p * Math.PI / 2);
+            if (p >= 1) StopCrossfade();
+        }
+
+        private static void StopTail()
+        {
+            var t = _tail;
+            _tail = null;
+            if (t == null) return;
+            try { t.Pause(); t.Dispose(); } catch { }
+        }
+
+        private static void StopCrossfade()
+        {
+            bool was = _fading;
+            _fading = false;
+            StopTail();
+            if (was && _player != null) { try { _player.Volume = UserVolume; } catch { } }
+        }
+
         // ================= 30-sekundowe fragmenty (szybkie wyszukiwanie bez Spotify Premium) =================
         private static readonly System.Net.Http.HttpClient PreviewHttp = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(4) };
         /// <summary>Gra fragment piosenki z internetu (nie z biblioteki i nie radio).</summary>
@@ -276,6 +391,7 @@ namespace IslandPlayer
             try
             {
                 HookSession();
+                StopCrossfade();
                 SaveGain();
                 StopLeveler();
                 StopLive();
@@ -338,6 +454,7 @@ namespace IslandPlayer
             if (st == null || string.IsNullOrWhiteSpace(st.Url)) return;
             _clickedStation = st;
             _triedUrls.Clear();
+            StopCrossfade();
             Start(st);
         }
 
