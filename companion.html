@@ -211,7 +211,8 @@ let mode = localStorage.getItem('mode') || 'pc';
 function setMode(m) {
   mode = m; localStorage.setItem('mode', m);
   document.querySelectorAll('#mode button').forEach(b => b.classList.toggle('on', b.dataset.m === m));
-  $('lyr').style.display = 'none'; lastLyr = ''; lastCover = null; now = null;
+  $('lyr').style.display = 'none'; lastLyr = ''; lastCover = null; now = null; spLastArt = null;
+  if (m === 'pc' && spNow) { spNow = null; clearInterval(spTimer); }
   if (m === 'pc') { au.pause(); } else { $('offline').style.display = 'none'; }
   renderPhone();
 }
@@ -264,18 +265,18 @@ function palette(url) {
 // mini odtwarzacz na zakładkach innych niż „Teraz”
 function updateMini() {
   const onNow = document.querySelector('.tab[data-p=now]').classList.contains('on');
-  const has = mode === 'pc' ? !!(now && now.title) : !!cur;
+  const has = spOn() || (mode === 'pc' ? !!(now && now.title) : !!cur);
   const show = !onNow && has;
   $('mini').style.display = show ? 'flex' : 'none';
   document.body.classList.toggle('mini', show);
   if (!show) return;
   $('mtt').textContent = $('tt').textContent;
   $('mta').textContent = $('ta').textContent;
-  const playing = mode === 'pc' ? now && now.playing : !au.paused;
+  const playing = spOn() ? spNow.playing : mode === 'pc' ? now && now.playing : !au.paused;
   $('miplay').innerHTML = playing ? '<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>' : '<path d="M7 4l13 8-13 8z"/>';
 }
 async function poll() {
-  if (mode !== 'pc') return;
+  if (mode !== 'pc' || spOn()) return;
   try {
     const n = await api('/api/now');
     $('offline').style.display = 'none';
@@ -305,7 +306,8 @@ async function loadLyrics() {
 let lyrIdx = -1;
 function tick() {
   let pos, dur;
-  if (mode === 'pc') { pos = Math.min(pcPos(), now ? now.dur || 1e9 : 0); dur = now ? now.dur : 0; }
+  if (spOn()) { dur = spNow.dur; pos = Math.min(spPos(), dur || 1e9); }
+  else if (mode === 'pc') { pos = Math.min(pcPos(), now ? now.dur || 1e9 : 0); dur = now ? now.dur : 0; }
   else { pos = au.currentTime || 0; dur = isFinite(au.duration) ? au.duration : 0; }
   $('tpos').textContent = fmt(pos); $('tdur').textContent = dur ? fmt(dur) : (mode === 'phone' && cur && cur.live ? 'LIVE' : '0:00');
   $('pfill').style.width = dur ? Math.min(100, pos / dur * 100) + '%' : '0%';
@@ -326,11 +328,12 @@ async function cmd(c, v) {
   setTimeout(poll, 150);
 }
 $('bplay').onclick = () => {
+  if (spOn()) { spNow.playing = !spNow.playing; spNow.pos = spPos(); spNow.at = performance.now(); playIcon(spNow.playing); spCmd(spNow.playing ? 'play' : 'pause'); return; }
   if (mode === 'pc') { if (now) { now.playing = !now.playing; now.pos = pcPos(); nowAt = performance.now(); playIcon(now.playing); } cmd('toggle'); }
   else { if (!au.src) return; au.paused ? au.play() : au.pause(); }
 };
-$('bnext').onclick = () => mode === 'pc' ? cmd('next') : phoneNext(1);
-$('bprev').onclick = () => mode === 'pc' ? cmd('prev') : phoneNext(-1);
+$('bnext').onclick = () => spOn() ? spCmd('next') : mode === 'pc' ? cmd('next') : phoneNext(1);
+$('bprev').onclick = () => spOn() ? spCmd('previous') : mode === 'pc' ? cmd('prev') : phoneNext(-1);
 // przewijanie: dotknij / przeciągnij pasek
 (() => {
   const el = $('prog'); let drag = false;
@@ -353,6 +356,7 @@ function playOnPhone(item, list, index) {
 }
 async function startCur() {
   cur = queue[qi]; if (!cur) return;
+  if (spNow) { spNow = null; spCmd('pause', true); }
   const me = cur;
   if (cur.id && have.has(cur.id)) {
     const loc = await localUrls(cur.id);
@@ -387,6 +391,7 @@ if ('mediaSession' in navigator) {
   navigator.mediaSession.setActionHandler('previoustrack', () => phoneNext(-1));
 }
 function renderPhone() {
+  if (spOn()) return renderSpotify();
   if (mode !== 'phone') { poll(); return; }
   $('tt').textContent = cur ? cur.title : T('Wybierz coś z biblioteki', 'Pick something from your library');
   $('ta').textContent = cur ? cur.artist || '' : T('albo wyszukaj stację lub podcast', 'or search for a station or podcast');
@@ -451,6 +456,7 @@ async function search() {
   const q = $('sq').value.trim();
   if (q.length < 2) return;
   $('sres').innerHTML = '<div class="empty">' + T('Szukam…', 'Searching…') + '</div>';
+  if (pcDown || mode === 'phone') return searchDirect(q);
   try {
     const r = sData = await api('/api/search', 'q=' + encodeURIComponent(q));
     let h = '';
@@ -469,6 +475,7 @@ function pick(kind, i) {
     if (mode === 'pc') api('/api/play', 'id=' + t.id).then(() => toast(T('Gra na komputerze', 'Playing on PC')));
     else playOnPhone(libItem(t));
   } else if (kind === 'spot') { api('/api/play', 't=' + r.spot[i].t).then(() => toast(T('Gra w Spotify', 'Playing in Spotify'))); }
+  else if (kind === 'sp') { spPlay(r.sp[i]); return; }
   else if (kind === 'radio') {
     const s = r.radio[i];
     if (mode === 'pc') api('/api/play', 't=' + s.t).then(() => toast(T('Radio gra na komputerze', 'Radio playing on PC')));
@@ -613,6 +620,120 @@ async function renderMore() {
   }
 }
 
+// ---------- Spotify prosto z telefonu (Premium): działa też poza domem, na danych komórkowych ----------
+// Komputer daje telefonowi kopię klucza; telefon sam go odświeża i oddaje nowy po powrocie do Wi-Fi.
+let sp = null; try { sp = JSON.parse(localStorage.getItem('sp') || 'null'); } catch (e) { }
+let spNow = null, spTimer = null, spSyncAt = 0;
+const spSave = () => { try { localStorage.setItem('sp', JSON.stringify(sp)); } catch (e) { } };
+async function spSync() {
+  if (Date.now() - spSyncAt < 5 * 60000) return;
+  spSyncAt = Date.now();
+  try {
+    if (sp && sp.dirty) { const r = await api('/api/spotifyback', 'r=' + encodeURIComponent(sp.refresh) + '&a=' + encodeURIComponent(sp.access || '') + '&u=' + (sp.until || 0) + '&s=' + sp.stamp); if (r) { sp.dirty = false; spSave(); } }
+    const d = await api('/api/spotify');
+    if (!d || d.ok === false) { if (sp && !sp.dirty) { sp = null; localStorage.removeItem('sp'); } return; }
+    if (!sp || sp.dirty !== true || d.stamp >= sp.stamp) { sp = { client: d.client, refresh: d.refresh, access: d.access, until: d.until, stamp: d.stamp }; spSave(); }
+  } catch (e) { }
+}
+async function spToken() {
+  if (!sp) return null;
+  if (sp.access && Date.now() < sp.until - 60000) return sp.access;
+  try {
+    const r = await fetch('https://accounts.spotify.com/api/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'grant_type=refresh_token&refresh_token=' + encodeURIComponent(sp.refresh) + '&client_id=' + encodeURIComponent(sp.client) });
+    if (!r.ok) return null;
+    const j = await r.json();
+    sp.access = j.access_token; sp.until = Date.now() + (j.expires_in || 3600) * 1000;
+    if (j.refresh_token && j.refresh_token !== sp.refresh) { sp.refresh = j.refresh_token; sp.stamp = Date.now(); sp.dirty = true; }
+    spSave();
+    return sp.access;
+  } catch (e) { return null; }
+}
+async function spApi(method, path, body) {
+  const t = await spToken(); if (!t) throw new Error('no token');
+  const r = await fetch('https://api.spotify.com/v1' + path, { method, headers: Object.assign({ Authorization: 'Bearer ' + t }, body ? { 'Content-Type': 'application/json' } : {}), body: body ? JSON.stringify(body) : undefined });
+  if (r.status === 204) return { status: 204 };
+  let j = null; try { j = await r.json(); } catch (e) { }
+  return { status: r.status, j };
+}
+const spOn = () => !!spNow && mode === 'phone';
+const spPos = () => spNow ? spNow.pos + (spNow.playing ? (performance.now() - spNow.at) / 1000 : 0) : 0;
+async function spPlay(t) {
+  if (mode !== 'phone') setMode('phone');
+  au.pause();
+  try {
+    let r = await spApi('PUT', '/me/player/play', { uris: [t.uri] });
+    if (r.status === 404) {
+      const d = await spApi('GET', '/me/player/devices');
+      const devs = (d.j && d.j.devices) || [];
+      const dev = devs.find(x => x.type === 'Smartphone') || devs.find(x => x.is_active) || devs[0];
+      if (!dev) {
+        toast(T('Otwieram Spotify – gdy się włączy, dotknij utworu jeszcze raz', 'Opening Spotify – tap the song again once it starts'));
+        location.href = 'spotify:track:' + t.uri.split(':').pop();
+        return;
+      }
+      r = await spApi('PUT', '/me/player/play?device_id=' + encodeURIComponent(dev.id), { uris: [t.uri] });
+    }
+    if (r.status === 403) { toast(T('Spotify pozwala na to tylko z kontem Premium', 'Spotify only allows this with Premium')); return; }
+    if (r.status >= 300) { toast('Spotify: ' + r.status); return; }
+    spNow = { title: t.title, artist: t.sub, art: t.art, pos: 0, dur: 0, playing: true, at: performance.now() };
+    renderSpotify();
+    document.querySelector('.tab[data-p=now]').click();
+    clearInterval(spTimer); spTimer = setInterval(spPoll, 3000); setTimeout(spPoll, 800);
+  } catch (e) { toast(T('Brak połączenia ze Spotify', "Can't reach Spotify")); }
+}
+async function spCmd(c, quiet) {
+  try { await spApi(c === 'next' || c === 'previous' ? 'POST' : 'PUT', '/me/player/' + c); } catch (e) { if (!quiet) toast(T('Brak połączenia ze Spotify', "Can't reach Spotify")); }
+  if (!quiet) setTimeout(spPoll, 500);
+  if (quiet) clearInterval(spTimer);
+}
+async function spPoll() {
+  if (!spNow) return clearInterval(spTimer);
+  try {
+    const r = await spApi('GET', '/me/player/currently-playing');
+    if (r.status === 204 || !r.j || !r.j.item) return;
+    const it = r.j.item;
+    spNow.title = it.name; spNow.artist = (it.artists || []).map(a => a.name).join(', ');
+    spNow.art = it.album && it.album.images && it.album.images[0] ? it.album.images[0].url : spNow.art;
+    spNow.dur = (it.duration_ms || 0) / 1000; spNow.pos = (r.j.progress_ms || 0) / 1000; spNow.playing = !!r.j.is_playing; spNow.at = performance.now();
+    renderSpotify();
+  } catch (e) { }
+}
+let spLastArt = '';
+function renderSpotify() {
+  $('tt').textContent = spNow.title; $('ta').textContent = spNow.artist || '';
+  $('src').textContent = 'Spotify'; $('src').style.display = '';
+  if (spNow.art !== spLastArt) { spLastArt = spNow.art; setCover(spNow.art || ''); }
+  $('lyr').style.display = 'none';
+  playIcon(spNow.playing);
+}
+// wyszukiwanie bez komputera: pobrane utwory + Spotify
+async function searchDirect(q) {
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  let libHits = [];
+  if (pcDown) {
+    const c = (lib && lib.length ? lib : await loadLibCache()).filter(t => have.has(t.id));
+    libHits = c.filter(t => words.every(w => (t.title + ' ' + t.artist + ' ' + (t.album || '')).toLowerCase().includes(w))).slice(0, 8);
+  }
+  let spHits = [], radio = [], pods = [], pcLib = [];
+  const jobs = [];
+  if (sp) jobs.push(spApi('GET', '/search?type=track&limit=10&q=' + encodeURIComponent(q)).then(r => {
+    spHits = ((r.j && r.j.tracks && r.j.tracks.items) || []).map(x => ({ uri: x.uri, title: x.name, sub: (x.artists || []).map(a => a.name).join(', '), art: x.album && x.album.images && x.album.images.length ? x.album.images[x.album.images.length > 1 ? 1 : 0].url : '' }));
+  }).catch(() => { }));
+  if (!pcDown) jobs.push(api('/api/search', 'q=' + encodeURIComponent(q)).then(r => { pcLib = r.lib || []; radio = r.radio || []; pods = r.pods || []; }).catch(() => { }));
+  await Promise.all(jobs);
+  if ($('sq').value.trim() !== q) return;
+  sData = { lib: pcDown ? libHits : pcLib, sp: spHits, radio, pods };
+  let h = '';
+  if (sData.lib.length) h += '<h2>' + T('Moja muzyka', 'My music') + '</h2>' + sData.lib.map((t, i) => rowHtml(pcDown ? '' : (t.art ? U('/api/art', 'id=' + t.id) : ''), t.title, t.artist, 'data-k="lib" data-i="' + i + '"')).join('');
+  if (spHits.length) h += '<h2>Spotify</h2>' + spHits.map((t, i) => rowHtml(t.art, t.title, t.sub, 'data-k="sp" data-i="' + i + '"')).join('');
+  if (radio.length) h += '<h2>Radio</h2>' + radio.map((t, i) => rowHtml(t.art, t.title, t.sub, 'data-k="radio" data-i="' + i + '"', true)).join('');
+  if (pods.length) h += '<h2>' + T('Podcasty', 'Podcasts') + '</h2>' + pods.map((t, i) => rowHtml(t.art, t.title, t.sub, 'data-k="pod" data-i="' + i + '"')).join('');
+  $('sres').innerHTML = h || '<div class="empty">' + (pcDown && !sp ? T('Bez połączenia z komputerem szukam tylko w pobranych utworach.', 'Without your PC I only search downloaded songs.') : T('Nic nie znaleziono', 'Nothing found')) + '</div>';
+  $('sres').querySelectorAll('.row').forEach(el => el.onclick = () => pick(el.dataset.k, +el.dataset.i));
+  if (pcDown) hydrateArt($('sres'), sData.lib);
+}
+
 // ---------- muzyka offline: cała biblioteka pobiera się sama do pamięci telefonu ----------
 // (IndexedDB działa też przez zwykłe http w domowym Wi-Fi; gra, dopóki aplikacja jest otwarta)
 let have = new Set(), pcDown = false, libOffline = false, syncing = false, dlNow = '', downFails = 0;
@@ -700,7 +821,7 @@ async function heartbeat() {
   if (ok) {
     downFails = 0;
     if (pcDown) { pcDown = false; $('offline').style.display = 'none'; if (libOffline) { libOffline = false; lib = null; loadLib(); } }
-    syncDownloads();
+    syncDownloads(); spSync();
   } else if (++downFails >= 2 && !pcDown) {
     pcDown = true;
     if (mode === 'pc' && have.size) { setMode('phone'); toast(T('Brak połączenia z komputerem – grasz muzykę z telefonu', 'No connection to your PC – playing music from your phone')); }

@@ -138,6 +138,20 @@ namespace IslandPlayer
                         case "/api/play": await Json(stream, await Ui(() => Play(q))); break;
                         case "/api/episodes": await Json(stream, await EpisodesJson(q)); break;
                         case "/api/podcasts": await Json(stream, Serialize(PodcastService.Subscriptions.Select(s => new { t = Token(s), title = s.Title, author = s.Author, art = s.Art }))); break;
+                        case "/api/spotify":
+                            {
+                                var share = await SpotifyService.ShareWithPhoneAsync();
+                                await Json(stream, share == null ? "{\"ok\":false}" : Serialize(share));
+                                break;
+                            }
+                        case "/api/spotifyback":
+                            {
+                                long.TryParse(q.TryGetValue("u", out var u) ? u : "0", out var until);
+                                long.TryParse(q.TryGetValue("s", out var st) ? st : "0", out var stamp);
+                                bool took = await Ui(() => SpotifyService.AdoptFromPhone(q.TryGetValue("r", out var r) ? r : "", q.TryGetValue("a", out var a) ? a : "", until, stamp) ? "1" : "0") == "1";
+                                await Json(stream, took ? "{\"ok\":true}" : "{\"ok\":false}");
+                                break;
+                            }
                         case "/api/radio": await Json(stream, await RadioJson(q)); break;
                         case "/api/radiofav": await Json(stream, await Ui(() => RadioFav(q))); break;
                         case "/api/podtop": await Json(stream, await PodTopJson()); break;

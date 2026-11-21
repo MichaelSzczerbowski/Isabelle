@@ -239,8 +239,14 @@ namespace IslandPlayer
             if (!res.IsSuccessStatusCode)
             {
                 Log.Info("spotify token: " + (int)res.StatusCode + " " + json);
-                // klucz odwołany (np. usunięty dostęp na stronie Spotify) - rozłączamy
-                if (form["grant_type"] == "refresh_token" && res.StatusCode == HttpStatusCode.BadRequest) Disconnect();
+                // klucz odwołany (np. usunięty dostęp na stronie Spotify) - rozłączamy.
+                // Wyjątek: telefon ma kopię i mógł go poza domem odświeżyć (Spotify wtedy wymienia klucz) -
+                // nowy klucz telefon odda po powrocie do Wi-Fi, więc nie rozłączamy.
+                if (form["grant_type"] == "refresh_token" && res.StatusCode == HttpStatusCode.BadRequest)
+                {
+                    if ((DateTime.UtcNow - App.Config.SpotifySharedAt).TotalDays > 60) Disconnect();
+                    else { _access = null; Log.Info("spotify: czekam na nowszy klucz z telefonu"); }
+                }
                 return null;
             }
             using var doc = JsonDocument.Parse(json);
@@ -251,6 +257,7 @@ namespace IslandPlayer
             if (r.TryGetProperty("refresh_token", out var rt) && rt.ValueKind == JsonValueKind.String)
             {
                 App.Config.SpotifyRefreshToken = rt.GetString();
+                App.Config.SpotifyTokenStamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                 App.Config.Save();
             }
             return _access;
@@ -266,6 +273,40 @@ namespace IslandPlayer
                 ["refresh_token"] = App.Config.SpotifyRefreshToken,
                 ["client_id"] = ClientId,
             });
+        }
+
+        // ================= kopia klucza dla aplikacji w telefonie =================
+        /// <summary>Klucze dla telefonu, żeby poza domem sam szukał i puszczał w Spotify (tylko Premium).</summary>
+        public static async Task<object> ShareWithPhoneAsync()
+        {
+            if (!CanPlay) return null;
+            string access = await Token();
+            if (access == null) return null;
+            App.Config.SpotifySharedAt = DateTime.UtcNow;
+            App.Config.Save();
+            return new
+            {
+                client = ClientId, refresh = App.Config.SpotifyRefreshToken, access,
+                until = new DateTimeOffset(DateTime.SpecifyKind(_accessUntil, DateTimeKind.Utc)).ToUnixTimeMilliseconds(),
+                stamp = App.Config.SpotifyTokenStamp
+            };
+        }
+
+        /// <summary>Telefon odświeżył klucz poza domem (Spotify dał nowy) - przejmujemy go, jeśli jest nowszy.</summary>
+        public static bool AdoptFromPhone(string refresh, string access, long untilMs, long stamp)
+        {
+            if (!Configured || string.IsNullOrEmpty(refresh) || stamp <= App.Config.SpotifyTokenStamp) return false;
+            App.Config.SpotifyRefreshToken = refresh;
+            App.Config.SpotifyTokenStamp = stamp;
+            App.Config.Save();
+            if (!string.IsNullOrEmpty(access) && untilMs > 0)
+            {
+                _access = access;
+                _accessUntil = DateTimeOffset.FromUnixTimeMilliseconds(untilMs).UtcDateTime;
+            }
+            else _access = null;
+            Changed?.Invoke();
+            return true;
         }
 
         /// <summary>Zapytanie do Web API; null przy błędzie albo pustej odpowiedzi.</summary>

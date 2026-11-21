@@ -153,6 +153,10 @@ namespace IslandPlayer
         public string SpotifyRefreshToken { get; set; } = "";
         public string SpotifyUser { get; set; } = "";
         public bool SpotifyPremium { get; set; }
+        /// <summary>Kiedy dostaliśmy obecny klucz odświeżania (ms od 1970) - telefon i komputer biorą nowszy.</summary>
+        public long SpotifyTokenStamp { get; set; }
+        /// <summary>Kiedy telefon ostatnio dostał kopię klucza (może go sam odświeżać poza domem).</summary>
+        public DateTime SpotifySharedAt { get; set; }
         public bool AutoUpdate { get; set; } = true;
 
         public static string Folder
