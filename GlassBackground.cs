@@ -115,17 +115,17 @@ namespace IslandPlayer
             }
         }
 
-        private Window _host;
+        private Window _hostWindow;
 
         private void OnFrame(object sender, EventArgs e)
         {
             var now = DateTime.UtcNow;
             // okno zminimalizowane / schowane - nic nie liczymy (zero pracy w tle)
-            _host ??= Window.GetWindow(this);
-            if (!IsVisible || _host != null && _host.WindowState == WindowState.Minimized) { _last = now; return; }
+            _hostWindow ??= Window.GetWindow(this);
+            if (!IsVisible || _hostWindow != null && _hostWindow.WindowState == WindowState.Minimized) { _last = now; return; }
             // kolory płyną bardzo wolno - 30 kl./s wygląda tak samo jak 144, a to kilka razy mniej pracy
             // (okno przezroczyste odświeża się programowo, więc każda klatka sporo kosztuje); w tle jeszcze rzadziej
-            double minDt = _host != null && !_host.IsActive && !AlwaysSmooth ? 1.0 / 15 : 1.0 / 30;
+            double minDt = _hostWindow != null && !_hostWindow.IsActive && !AlwaysSmooth ? 1.0 / 15 : 1.0 / 30;
             if ((now - _last).TotalSeconds < minDt) return;
             double dt = Math.Min(0.1, (now - _last).TotalSeconds);
             _last = now;
