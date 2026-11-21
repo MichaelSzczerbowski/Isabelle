@@ -168,6 +168,7 @@ namespace IslandPlayer
 
             if (LibraryService.Tracks.Count == 0) LibraryService.LoadCache();
             WatchOutsideClicks();
+            WarmUp();
             Search("");
         }
 
@@ -216,8 +217,29 @@ namespace IslandPlayer
         private static readonly System.Net.Http.HttpClient Http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(6) };
 
         /// <summary>Utwory z internetu (katalog iTunes - te same piosenki są w Spotify i na YouTube).</summary>
+        // ostatnie wyniki z sieci - cofnięcie litery albo ponowne wpisanie pokazuje je od razu
+        private static readonly Dictionary<string, List<(string title, string artist, string art)>> SongCache =
+            new Dictionary<string, List<(string, string, string)>>(StringComparer.OrdinalIgnoreCase);
+
+        private static List<Result> SongResults(List<(string title, string artist, string art)> data)
+        {
+            string where = HasSpotify ? "Spotify" : "YouTube Music";
+            return data.Select(d => new Result { Kind = "web", Title = d.title, Subtitle = d.artist + " · " + where, ArtUrl = d.art }).ToList();
+        }
+
+        /// <summary>Połączenie z katalogiem nawiązujemy już przy otwarciu okna - pierwsze wyniki przychodzą szybciej.</summary>
+        private static void WarmUp()
+        {
+            _ = Task.Run(async () =>
+            {
+                try { using var r = await Http.GetAsync("https://itunes.apple.com/search?term=a&limit=1&media=music", System.Net.Http.HttpCompletionOption.ResponseHeadersRead); }
+                catch { }
+            });
+        }
+
         private static async Task<List<Result>> OnlineSongs(string q)
         {
+            lock (SongCache) { if (SongCache.TryGetValue(q, out var hit)) return SongResults(hit); }
             var list = new List<Result>();
             string url = "https://itunes.apple.com/search?media=music&entity=song&limit=6&term=" + Uri.EscapeDataString(q);
             using var doc = System.Text.Json.JsonDocument.Parse(await Http.GetStringAsync(url));
@@ -232,6 +254,12 @@ namespace IslandPlayer
                 string art = it.TryGetProperty("artworkUrl100", out var au) ? au.GetString() : null;
                 list.Add(new Result { Kind = "web", Title = title, Subtitle = artist + " · " + where, ArtUrl = art });
                 if (list.Count >= 3) break;
+            }
+            var data = list.Select(r => (r.Title, r.Subtitle.Split(" · ")[0], r.ArtUrl)).ToList();
+            lock (SongCache)
+            {
+                if (SongCache.Count > 200) SongCache.Clear();
+                SongCache[q] = data;
             }
             return list;
         }
@@ -298,10 +326,12 @@ namespace IslandPlayer
                 if (!Match(st.Name) || !seen.Add(st.Url)) continue;
                 list.Add(StationResult(st, LocalPlayer.IsFavorite(st) ? L.T("Ulubiona stacja", "Favorite station") : L.T("Ostatnio słuchane", "Recently played")));
             }
+            // od razu widać, że szukamy dalej w sieci - nikt nie uzna, że piosenki nie ma
+            _loading = q.Length >= 2;
             ShowResults(list);
 
-            if (q.Length < 3) return;
-            await Task.Delay(320);           // czekamy, aż skończysz pisać
+            if (q.Length < 2) return;
+            await Task.Delay(140);           // krótka chwila, gdy jeszcze piszesz
             if (id != _searchId) return;
             try
             {
@@ -333,19 +363,53 @@ namespace IslandPlayer
                     list.Add(StationResult(st, string.IsNullOrWhiteSpace(st.Country) ? L.T("Radio", "Radio") : st.Country));
                     added++;
                 }
-                if (added > 0) ShowResults(list, keepSelection: true);
             }
             catch (Exception ex) { Log.Info("szukaj: " + ex.Message); }
+            finally
+            {
+                if (id == _searchId && !_closing)
+                {
+                    _loading = false;
+                    ShowResults(list, keepSelection: true);
+                }
+            }
         }
 
         private static Result StationResult(RadioStation st, string sub) =>
             new Result { Kind = "station", Station = st, Title = st.Name, Subtitle = sub, Badge = L.T("Radio", "Radio") };
+
+        private bool _loading;
+
+        /// <summary>Wiersz „Szukam…” z pulsującymi kropkami (pod wynikami, nie da się go wybrać).</summary>
+        private FrameworkElement LoadingRow()
+        {
+            var panel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(12, 5, 10, 5) };
+            for (int i = 0; i < 3; i++)
+            {
+                var dot = new Ellipse { Width = 5, Height = 5, Fill = _accent, Margin = new Thickness(0, 0, 4, 0), Opacity = 0.3, VerticalAlignment = VerticalAlignment.Center };
+                var anim = new DoubleAnimation(0.3, 1, TimeSpan.FromMilliseconds(420)) { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever, BeginTime = TimeSpan.FromMilliseconds(i * 140) };
+                dot.BeginAnimation(OpacityProperty, anim);
+                panel.Children.Add(dot);
+            }
+            panel.Children.Add(new TextBlock
+            {
+                Text = L.T("Szukam w Spotify i radiu…", "Searching Spotify and radio…"), FontSize = 12, Foreground = Hex("#73FFFFFF"),
+                Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+            });
+            return panel;
+        }
 
         private void ShowResults(List<Result> list, bool keepSelection = false)
         {
             int old = _sel;
             _results = list;
             _rows.Children.Clear();
+            if (list.Count == 0 && _loading)
+            {
+                _rows.Children.Add(LoadingRow());
+                _sel = -1;
+                return;
+            }
             if (list.Count == 0)
             {
                 _rows.Children.Add(new TextBlock
@@ -357,7 +421,8 @@ namespace IslandPlayer
                 return;
             }
             for (int i = 0; i < list.Count; i++) _rows.Children.Add(MakeRow(list[i], i));
-            Select(keepSelection ? Math.Min(old, list.Count - 1) : 0);
+            if (_loading) _rows.Children.Add(LoadingRow());
+            Select(keepSelection ? Math.Max(0, Math.Min(old, list.Count - 1)) : 0);
         }
 
         /// <summary>Wiersz bez ramek i etykiet: miniatura, tytuł, podpis; przy zaznaczonym ↵.</summary>
