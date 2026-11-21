@@ -266,18 +266,20 @@ namespace IslandPlayer
         public static int StreamReconnects => _live?.Reconnects ?? 0;
 
         // ================= przenikanie utworów (crossfade) =================
-        // Kilka sekund przed końcem utworu drugi, „cichy” odtwarzacz przejmuje końcówkę obecnej piosenki i ją wycisza,
-        // a główny odtwarzacz (ten widoczny w wyspie) już gra następną i ją podgłaśnia.
+        // Przygotowanie: ~3 s wcześniej drugi, niewidoczny odtwarzacz otwiera obecną piosenkę i czeka (bez opóźnienia na starcie).
+        // Przejęcie: przez 0,25 s oba grają TĘ SAMĄ końcówkę (płynna zamiana, bez przeskoku), potem główny odtwarzacz
+        // (ten w wyspie) przechodzi do następnej piosenki i ją podgłaśnia, a drugi wycisza końcówkę poprzedniej.
+        // Głośność zmienia się co ~10 ms w tle - bez „schodków” słyszalnych przy wolniejszym odświeżaniu.
         private static System.Windows.Threading.DispatcherTimer _xfTimer;
         private static MediaPlayer _tail;
-        private static bool _fading, _xfStarting;
-        private static DateTime _fadeStart;
-        private static double _fadeLen;
+        private static LibraryTrack _tailTrack;
+        private static bool _tailReady, _fading;
+        private static System.Threading.CancellationTokenSource _xfCts;
 
         private static void EnsureCrossfadeWatch()
         {
             if (_xfTimer != null) return;
-            _xfTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(80) };
+            _xfTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
             _xfTimer.Tick += (s, e) => CrossfadeTick();
             _xfTimer.Start();
         }
@@ -286,35 +288,46 @@ namespace IslandPlayer
         {
             try
             {
-                if (_fading) { UpdateFade(); return; }
+                if (_fading) return;
                 int sec = App.Config.Crossfade;
-                if (sec <= 0 || _xfStarting || _player == null || _list == null || CurrentStation != null || PlayingPreview) return;
+                var t = CurrentTrack;
+                if (sec <= 0 || _player == null || _list == null || CurrentStation != null || PlayingPreview || t == null)
+                {
+                    if (_tail != null) StopCrossfade();
+                    return;
+                }
                 var ses = _player.PlaybackSession;
                 if (ses.PlaybackState != MediaPlaybackState.Playing) return;
                 double dur = ses.NaturalDuration.TotalSeconds, pos = ses.Position.TotalSeconds;
                 if (dur < sec * 2 + 5) return;                    // krótkie utwory bez przenikania
                 double remain = dur - pos;
-                if (remain > sec || remain < 1) return;
-                // czy jest następny utwór (w kolejności - także przy losowaniu)
-                var cur = _list.CurrentItem;
-                if (cur == null) return;
-                var order = _list.ShuffleEnabled ? new List<MediaPlaybackItem>(_list.ShuffledItems) : new List<MediaPlaybackItem>(_list.Items);
-                int idx = -1;
-                for (int i = 0; i < order.Count; i++) if (ReferenceEquals(order[i], cur)) { idx = i; break; }
-                if (!_list.AutoRepeatEnabled && (idx < 0 || idx >= order.Count - 1)) return;
-                var t = CurrentTrack;
-                if (t == null) return;
-                StartCrossfade(t, Math.Min(sec, remain));
+                if (_tail != null && !ReferenceEquals(_tailTrack, t)) StopCrossfade();     // zmienił się utwór (np. przewinięcie)
+                if (remain > sec + 3 || remain < 0.8) return;
+                if (!HasNextItem()) return;
+
+                if (_tail == null) { PrepareTail(t); return; }   // ~3 s przed - otwieramy w tle
+                if (remain <= sec && _tailReady) _ = RunCrossfade(t, Math.Min(sec, remain - 0.3));
             }
             catch (Exception ex) { Log.Info("przenikanie: " + ex.Message); StopCrossfade(); }
         }
 
-        private static void StartCrossfade(LibraryTrack t, double len)
+        private static bool HasNextItem()
         {
-            _xfStarting = true;
-            StopTail();
-            var tail = new MediaPlayer { AutoPlay = false, Volume = UserVolume };
+            var cur = _list?.CurrentItem;
+            if (cur == null) return false;
+            if (_list.AutoRepeatEnabled) return true;
+            var order = _list.ShuffleEnabled ? new List<MediaPlaybackItem>(_list.ShuffledItems) : new List<MediaPlaybackItem>(_list.Items);
+            int idx = order.IndexOf(cur);
+            return idx >= 0 && idx < order.Count - 1;
+        }
+
+        private static void PrepareTail(LibraryTrack t)
+        {
+            _tailReady = false;
+            _tailTrack = t;
+            var tail = new MediaPlayer { AutoPlay = false, Volume = 0 };
             tail.CommandManager.IsEnabled = false;            // niewidoczny dla wyspy i klawiszy multimedialnych
+            _tail = tail;
             MediaSource src = null;
             if (Equalizer.Enabled)
             {
@@ -324,48 +337,91 @@ namespace IslandPlayer
             src ??= MediaSource.CreateFromUri(new Uri(t.Path));
             tail.MediaOpened += (s, e) =>
             {
-                try
-                {
-                    // końcówka startuje dokładnie tam, gdzie gra główny odtwarzacz, a ten od razu przechodzi dalej
-                    var main = _player;
-                    if (main == null || !ReferenceEquals(CurrentTrack, t)) { s.Dispose(); _xfStarting = false; return; }
-                    s.PlaybackSession.Position = main.PlaybackSession.Position + TimeSpan.FromMilliseconds(40);
-                    s.Play();
-                    main.Volume = 0;
-                    _list?.MoveNext();
-                    System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(() =>
-                    {
-                        _tail = s;
-                        _fadeStart = DateTime.UtcNow;
-                        _fadeLen = Math.Max(1, len);
-                        _fading = true;
-                        _xfStarting = false;
-                    }));
-                }
-                catch (Exception ex) { Log.Info("przenikanie: " + ex.Message); _xfStarting = false; }
+                // od razu ustawiamy się blisko miejsca przejęcia - później skok jest krótki i szybki
+                try { s.PlaybackSession.Position = _player.PlaybackSession.Position + TimeSpan.FromSeconds(2); } catch { }
+                System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(() => { if (ReferenceEquals(_tail, s)) _tailReady = true; }));
             };
-            tail.MediaFailed += (s, e) => { _xfStarting = false; try { s.Dispose(); } catch { } };
+            tail.MediaFailed += (s, e) => System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(() => { if (ReferenceEquals(_tail, s)) StopCrossfade(); }));
             tail.Source = src;
         }
 
-        private static void UpdateFade()
+        private static async Task RunCrossfade(LibraryTrack t, double len)
         {
             var main = _player;
-            if (main == null || _tail == null) { StopCrossfade(); return; }
-            // pauza / stop w trakcie przenikania - końcówka znika od razu
-            if (main.PlaybackSession.PlaybackState == MediaPlaybackState.Paused) { StopCrossfade(); return; }
-            double p = Math.Clamp((DateTime.UtcNow - _fadeStart).TotalSeconds / _fadeLen, 0, 1);
-            double v = UserVolume;
-            // równa moc: suma głośności brzmi stale, bez „dołka” w połowie
-            main.Volume = v * Math.Sin(p * Math.PI / 2);
-            _tail.Volume = v * Math.Cos(p * Math.PI / 2);
-            if (p >= 1) StopCrossfade();
+            var tail = _tail;
+            var list = _list;
+            if (main == null || tail == null || list == null) return;
+            _fading = true;
+            _xfCts?.Cancel();
+            var cts = new System.Threading.CancellationTokenSource();
+            _xfCts = cts;
+            var tok = cts.Token;
+            try
+            {
+                await Task.Run(async () =>
+                {
+                    // 1) końcówka startuje w miejscu, w którym gra główny odtwarzacz
+                    tail.Volume = 0;
+                    tail.PlaybackSession.Position = main.PlaybackSession.Position + TimeSpan.FromMilliseconds(30);
+                    tail.Play();
+                    var sw = System.Diagnostics.Stopwatch.StartNew();
+                    while (tail.PlaybackSession.PlaybackState != MediaPlaybackState.Playing && sw.ElapsedMilliseconds < 600)
+                    {
+                        tok.ThrowIfCancellationRequested();
+                        await Task.Delay(5);
+                    }
+                    // 2) przez 0,25 s oba grają to samo - zamiana bez przeskoku
+                    const double blend = 0.25;
+                    sw.Restart();
+                    while (true)
+                    {
+                        tok.ThrowIfCancellationRequested();
+                        double p = Math.Min(1, sw.Elapsed.TotalSeconds / blend), v = UserVolume;
+                        tail.Volume = v * Math.Sin(p * Math.PI / 2);
+                        main.Volume = v * Math.Cos(p * Math.PI / 2);
+                        if (p >= 1) break;
+                        await Task.Delay(10);
+                    }
+                    // 3) główny odtwarzacz przechodzi do następnej piosenki (po cichu) i ją podgłaśnia
+                    main.Volume = 0;
+                    list.MoveNext();
+                    double fade = Math.Max(1, len - blend);
+                    sw.Restart();
+                    while (true)
+                    {
+                        tok.ThrowIfCancellationRequested();
+                        if (main.PlaybackSession.PlaybackState == MediaPlaybackState.Paused) break;     // pauza w trakcie
+                        double p = Math.Min(1, sw.Elapsed.TotalSeconds / fade), v = UserVolume;
+                        // krzywa równej mocy, łagodnie wygładzona na początku i końcu
+                        double sp = p * p * (3 - 2 * p);
+                        main.Volume = v * Math.Sin(sp * Math.PI / 2);
+                        tail.Volume = v * Math.Cos(sp * Math.PI / 2);
+                        if (p >= 1) break;
+                        await Task.Delay(10);
+                    }
+                }, tok);
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { Log.Info("przenikanie: " + ex.Message); }
+            finally
+            {
+                if (ReferenceEquals(_xfCts, cts))
+                {
+                    _xfCts = null;
+                    _fading = false;
+                    StopTail();
+                    try { if (_player != null) _player.Volume = UserVolume; } catch { }
+                }
+                cts.Dispose();
+            }
         }
 
         private static void StopTail()
         {
             var t = _tail;
             _tail = null;
+            _tailTrack = null;
+            _tailReady = false;
             if (t == null) return;
             try { t.Pause(); t.Dispose(); } catch { }
         }
@@ -373,6 +429,8 @@ namespace IslandPlayer
         private static void StopCrossfade()
         {
             bool was = _fading;
+            try { _xfCts?.Cancel(); } catch { }
+            _xfCts = null;
             _fading = false;
             StopTail();
             if (was && _player != null) { try { _player.Volume = UserVolume; } catch { } }
