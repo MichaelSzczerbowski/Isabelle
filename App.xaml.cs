@@ -88,6 +88,7 @@ namespace IslandPlayer
             Equalizer.Load();
             LibraryService.StartWatching();
             NewReleases.Start();
+            PodcastService.Prefetch();      // subskrypcje i popularne gotowe, zanim otworzysz zakładkę
 
             UpdateService.Found += info => Current.Dispatcher.BeginInvoke(new Action(() => _tray?.ShowUpdate(info)));
             _ = UpdateLoopAsync();

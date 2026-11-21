@@ -535,19 +535,25 @@ namespace IslandPlayer
                 props.Type = MediaPlaybackType.Music;
                 props.MusicProperties.Title = ep.Title;
                 props.MusicProperties.Artist = ep.Show;
-                string cover = await DownloadPreviewCover(ep.Art);
-                if (token != _radioToken) return;
-                if (cover != null)
-                {
-                    try { props.Thumbnail = RandomAccessStreamReference.CreateFromFile(await StorageFile.GetFileFromPathAsync(cover)); } catch { }
-                }
                 item.ApplyDisplayProperties(props);
                 // wracamy tam, gdzie ostatnio skończyłeś
                 double pos = PodcastService.IsDone(ep.Key) ? 0 : PodcastService.Position(ep.Key);
                 _pendingSeek = pos > 5 ? pos : 0;
+                // gramy od razu - okładka dochodzi chwilę później (wcześniej start czekał na jej pobranie)
                 Player.Source = item;
                 Player.Volume = UserVolume;
                 Player.Play();
+                Changed?.Invoke();
+                string cover = await DownloadPreviewCover(ep.Art);
+                if (token == _radioToken && cover != null)
+                {
+                    try
+                    {
+                        props.Thumbnail = RandomAccessStreamReference.CreateFromFile(await StorageFile.GetFileFromPathAsync(cover));
+                        item.ApplyDisplayProperties(props);
+                    }
+                    catch { }
+                }
                 if (_podTimer == null)
                 {
                     _podTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
@@ -608,17 +614,21 @@ namespace IslandPlayer
                 props.Type = MediaPlaybackType.Music;
                 props.MusicProperties.Title = title;
                 props.MusicProperties.Artist = artist + " · " + L.T("fragment 30 s", "30 s preview");
-                // okładka do pliku zanim zacznie grać - wyspa czyta ją z innego procesu i od razu ją ma
-                string cover = await DownloadPreviewCover(artUrl);
-                if (token != _radioToken) return;      // w międzyczasie włączono coś innego
-                if (cover != null)
-                {
-                    try { props.Thumbnail = RandomAccessStreamReference.CreateFromFile(await StorageFile.GetFileFromPathAsync(cover)); } catch { }
-                }
                 item.ApplyDisplayProperties(props);
+                // gramy od razu, okładka dochodzi zaraz potem
                 Player.Source = item;
                 Player.Volume = UserVolume;
                 Player.Play();
+                string cover = await DownloadPreviewCover(artUrl);
+                if (token == _radioToken && cover != null)
+                {
+                    try
+                    {
+                        props.Thumbnail = RandomAccessStreamReference.CreateFromFile(await StorageFile.GetFileFromPathAsync(cover));
+                        item.ApplyDisplayProperties(props);
+                    }
+                    catch { }
+                }
             }
             catch (Exception ex) { Log.Error(ex); }
         }

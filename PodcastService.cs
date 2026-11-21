@@ -39,7 +39,18 @@ namespace IslandPlayer
             public HashSet<string> Done { get; set; } = new HashSet<string>();
         }
 
-        private static readonly HttpClient Http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        // kompresja gzip - kanały RSS potrafią mieć kilka MB, skompresowane ładują się kilka razy szybciej
+        private static readonly HttpClient Http = new HttpClient(new HttpClientHandler { AutomaticDecompression = System.Net.DecompressionMethods.All }) { Timeout = TimeSpan.FromSeconds(15) };
+        private static readonly JsonSerializerOptions JsonOpts = new JsonSerializerOptions { IncludeFields = true };
+        private static string CacheDir
+        {
+            get
+            {
+                string d = Path.Combine(Settings.Folder, "podcasts");
+                try { Directory.CreateDirectory(d); } catch { }
+                return d;
+            }
+        }
         private static string FilePath => Path.Combine(Settings.Folder, "podcasts.json");
         private static Store _store;
         private static readonly object Lock = new object();
@@ -137,11 +148,30 @@ namespace IslandPlayer
         }
 
         private static List<PodcastShow> _top;
+        private static DateTime _topAt = DateTime.MinValue;
 
-        /// <summary>Najpopularniejsze podcasty w Polsce (lista Apple Podcasts).</summary>
-        public static async Task<List<PodcastShow>> TopAsync()
+        /// <summary>Ostatnio zapisana lista popularnych (z dysku) - do pokazania od razu, zanim przyjdzie świeża.</summary>
+        public static List<PodcastShow> CachedTop()
         {
             if (_top != null) return _top;
+            try
+            {
+                string f = Path.Combine(CacheDir, "top.json");
+                if (File.Exists(f))
+                {
+                    _top = JsonSerializer.Deserialize<List<PodcastShow>>(File.ReadAllText(f));
+                    _topAt = File.GetLastWriteTimeUtc(f);
+                }
+            }
+            catch { }
+            return _top;
+        }
+
+        /// <summary>Najpopularniejsze podcasty w Polsce (lista Apple Podcasts), odświeżane co 12 h.</summary>
+        public static async Task<List<PodcastShow>> TopAsync()
+        {
+            var cached = CachedTop();
+            if (cached != null && cached.Count > 0 && (DateTime.UtcNow - _topAt).TotalHours < 12) return cached;
             var ids = new List<string>();
             string country = L.En ? "us" : "pl";
             using (var doc = JsonDocument.Parse(await Http.GetStringAsync("https://rss.applemarketingtools.com/api/v2/" + country + "/podcasts/top/25/podcasts.json")))
@@ -170,7 +200,41 @@ namespace IslandPlayer
                 foreach (var id in ids) if (byId.TryGetValue(id, out var s)) list.Add(s);       // kolejność z rankingu
             }
             _top = list;
+            _topAt = DateTime.UtcNow;
+            try { File.WriteAllText(Path.Combine(CacheDir, "top.json"), JsonSerializer.Serialize(list)); } catch { }
             return list;
+        }
+
+        private static string FeedFile(PodcastShow show) =>
+            Path.Combine(CacheDir, "feed-" + Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.UTF8.GetBytes(show.Feed))).Substring(0, 16) + ".json");
+
+        /// <summary>Ostatnio wczytane odcinki (pamięć albo dysk) - lista pojawia się od razu.</summary>
+        public static List<PodcastEpisode> CachedEpisodes(PodcastShow show)
+        {
+            lock (Lock) if (FeedCache.TryGetValue(show.Feed, out var c)) return c.eps;
+            try
+            {
+                string f = FeedFile(show);
+                if (!File.Exists(f)) return null;
+                var eps = JsonSerializer.Deserialize<List<PodcastEpisode>>(File.ReadAllText(f), JsonOpts);
+                // z dysku: „stare” - świeże i tak dociągniemy w tle
+                lock (Lock) FeedCache[show.Feed] = (File.GetLastWriteTimeUtc(f), eps);
+                return eps;
+            }
+            catch { return null; }
+        }
+
+        /// <summary>W tle odświeża odcinki subskrypcji i listę popularnych - po otwarciu wszystko jest gotowe.</summary>
+        public static void Prefetch()
+        {
+            Task.Run(async () =>
+            {
+                try { await TopAsync(); } catch { }
+                foreach (var sub in Subscriptions)
+                {
+                    try { CachedEpisodes(sub); await EpisodesAsync(sub); } catch { }
+                }
+            });
         }
 
         /// <summary>Odcinki z kanału RSS (najnowsze pierwsze), w pamięci na 20 minut.</summary>
@@ -203,6 +267,7 @@ namespace IslandPlayer
             }
             list = list.OrderByDescending(e => e.Date).ToList();
             lock (Lock) FeedCache[show.Feed] = (DateTime.UtcNow, list);
+            try { File.WriteAllText(FeedFile(show), JsonSerializer.Serialize(list, JsonOpts)); } catch { }
             return list;
         }
 

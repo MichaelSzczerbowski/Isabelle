@@ -27,6 +27,9 @@ namespace IslandPlayer
         private readonly Grid _header = new Grid();
         private int _loadId;
         private PodcastShow _show;
+        // ikonki ▶/❚❚ przy odcinkach - zgrane z wyspą
+        private readonly Dictionary<string, (Path icon, TextBlock title)> _epIcons = new Dictionary<string, (Path, TextBlock)>();
+        private const string PlayGeo = "M0,0 L10,6 L0,12 Z", PauseGeo = "M0,0 H3.5 V12 H0 Z M6.5,0 H10 V12 H6.5 Z";
 
         public PodcastView(Brush accent)
         {
@@ -66,11 +69,14 @@ namespace IslandPlayer
             right.Children.Add(listHost);
 
             Action changed = () => Dispatcher.BeginInvoke(new Action(RefreshSubs));
-            PodcastService.Changed += changed;
-            Unloaded += (s, e) => PodcastService.Changed -= changed;
-            Loaded += (s, e) => { PodcastService.Changed -= changed; PodcastService.Changed += changed; };
+            Action player = () => Dispatcher.BeginInvoke(new Action(RefreshIcons));
+            void Hook() { PodcastService.Changed -= changed; PodcastService.Changed += changed; LocalPlayer.Changed -= player; LocalPlayer.Changed += player; }
+            Hook();
+            Unloaded += (s, e) => { PodcastService.Changed -= changed; LocalPlayer.Changed -= player; };
+            Loaded += (s, e) => Hook();
 
             RefreshSubs();
+            PodcastService.Prefetch();
             _ = ShowTop();
         }
 
@@ -153,10 +159,14 @@ namespace IslandPlayer
             int id = ++_loadId;
             _show = null;
             SetHeader(L.T("Popularne podcasty", "Popular podcasts"), null);
-            Status(L.T("Wczytuję…", "Loading…"));
+            // lista z dysku od razu, świeża po chwili
+            var cached = PodcastService.CachedTop();
+            if (cached != null && cached.Count > 0) ShowShows(cached);
+            else Status(L.T("Wczytuję…", "Loading…"));
             try
             {
                 var list = await PodcastService.TopAsync();
+                if (ReferenceEquals(list, cached)) return;
                 if (id != _loadId) return;
                 ShowShows(list);
             }
@@ -196,30 +206,70 @@ namespace IslandPlayer
             int id = ++_loadId;
             _show = show;
             SetHeader(show.Title, show);
-            Status(L.T("Wczytuję odcinki…", "Loading episodes…"));
             _rows.Children.Clear();
+            _epIcons.Clear();
+            // odcinki z dysku od razu, świeże dociągamy w tle
+            var cached = PodcastService.CachedEpisodes(show);
+            if (cached != null && cached.Count > 0) RenderEpisodes(cached);
+            else Status(L.T("Wczytuję odcinki…", "Loading episodes…"));
             try
             {
                 var eps = await PodcastService.EpisodesAsync(show);
-                if (id != _loadId) return;
-                Status(eps.Count == 0 ? L.T("Brak odcinków", "No episodes") : null);
-                var culture = L.En ? new System.Globalization.CultureInfo("en-US") : new System.Globalization.CultureInfo("pl-PL");
-                foreach (var e0 in eps.Take(80))
-                {
-                    var ep = e0;
-                    string meta = (ep.Date != default ? ep.Date.ToString("d MMM yyyy", culture) : "") + (ep.Duration > 0 ? " · " + Dur(ep.Duration) : "");
-                    string right;
-                    if (PodcastService.IsDone(ep.Key)) right = "✓";
-                    else
-                    {
-                        double pos = PodcastService.Position(ep.Key);
-                        right = pos > 0 && ep.Duration > 0 ? L.T("zostało ", "") + Dur((int)(ep.Duration - pos)) + L.T("", " left") : null;
-                    }
-                    _rows.Children.Add(Row(PlayDot(), ep.Title, meta, right, () => LocalPlayer.PlayPodcast(ep)));
-                }
-                _scroll.ScrollToTop();
+                if (id != _loadId || ReferenceEquals(eps, cached)) return;
+                RenderEpisodes(eps);
             }
-            catch (Exception ex) { if (id == _loadId) Status(L.T("Nie udało się wczytać odcinków tego podcastu.", "Couldn't load this podcast's episodes.")); Log.Info("podcasty: " + ex.Message); }
+            catch (Exception ex)
+            {
+                if (id == _loadId && (cached == null || cached.Count == 0)) Status(L.T("Nie udało się wczytać odcinków tego podcastu.", "Couldn't load this podcast's episodes."));
+                Log.Info("podcasty: " + ex.Message);
+            }
+        }
+
+        private void RenderEpisodes(List<PodcastEpisode> eps)
+        {
+            double offset = _scroll.VerticalOffset;
+            _rows.Children.Clear();
+            _epIcons.Clear();
+            Status(eps.Count == 0 ? L.T("Brak odcinków", "No episodes") : null);
+            var culture = L.En ? new System.Globalization.CultureInfo("en-US") : new System.Globalization.CultureInfo("pl-PL");
+            foreach (var e0 in eps.Take(80))
+            {
+                var ep = e0;
+                string meta = (ep.Date != default ? ep.Date.ToString("d MMM yyyy", culture) : "") + (ep.Duration > 0 ? " · " + Dur(ep.Duration) : "");
+                string right;
+                if (PodcastService.IsDone(ep.Key)) right = "✓";
+                else
+                {
+                    double pos = PodcastService.Position(ep.Key);
+                    right = pos > 0 && ep.Duration > 0 ? L.T("zostało ", "") + Dur((int)(ep.Duration - pos)) + L.T("", " left") : null;
+                }
+                var dot = PlayDot(out var icon);
+                var row = Row(dot, ep.Title, meta, right, () =>
+                {
+                    // ten sam odcinek = pauza / wznów; inny = włącz (ikonka zmienia się od razu, razem z wyspą)
+                    if (LocalPlayer.CurrentEpisode?.Key == ep.Key) LocalPlayer.TogglePause();
+                    else { LocalPlayer.PlayPodcast(ep); ShowPlaying(ep.Key, true); }
+                });
+                var title = (TextBlock)((StackPanel)((Grid)row.Child).Children[1]).Children[0];
+                _epIcons[ep.Key] = (icon, title);
+                _rows.Children.Add(row);
+            }
+            RefreshIcons();
+            _scroll.ScrollToVerticalOffset(offset);
+        }
+
+        /// <summary>▶ / ❚❚ przy odcinkach według tego, co naprawdę gra (te same zdarzenia co wyspa).</summary>
+        private void RefreshIcons() => ShowPlaying(LocalPlayer.CurrentEpisode?.Key, LocalPlayer.IsPlaying);
+
+        private void ShowPlaying(string key, bool playing)
+        {
+            foreach (var kv in _epIcons)
+            {
+                bool cur = kv.Key == key;
+                kv.Value.icon.Data = Geometry.Parse(cur && playing ? PauseGeo : PlayGeo);
+                kv.Value.icon.Margin = new Thickness(cur && playing ? 0 : 3, 0, 0, 0);
+                kv.Value.title.Foreground = cur ? _accent : Brushes.White;
+            }
         }
 
         private void SetHeader(string title, PodcastShow show)
@@ -231,9 +281,23 @@ namespace IslandPlayer
             _header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             if (show != null)
             {
+                // ‹ powrót do listy (popularne albo wyniki wyszukiwania)
+                var back = new Border
+                {
+                    Width = 32, Height = 32, CornerRadius = new CornerRadius(16), Background = Hex("#1FFFFFFF"), Cursor = Cursors.Hand,
+                    VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0), ToolTip = L.T("Wróć", "Back"),
+                    Child = new Path { Data = Geometry.Parse("M7,0 L0,7 L7,14"), Stroke = Brushes.White, StrokeThickness = 2, Width = 7, Height = 13, Stretch = Stretch.Uniform, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, StrokeLineJoin = PenLineJoin.Round, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 2, 0) },
+                };
+                back.MouseEnter += (s, e) => back.Background = Hex("#33FFFFFF");
+                back.MouseLeave += (s, e) => back.Background = Hex("#1FFFFFFF");
+                back.MouseLeftButtonDown += (s, e) => e.Handled = true;
+                back.MouseLeftButtonUp += (s, e) => GoBack();
                 var a = Art(show.Art, 64, 12);
                 a.Margin = new Thickness(0, 0, 14, 0);
-                _header.Children.Add(a);
+                var left = new StackPanel { Orientation = Orientation.Horizontal };
+                left.Children.Add(back);
+                left.Children.Add(a);
+                _header.Children.Add(left);
             }
             var texts = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             texts.Children.Add(new TextBlock { Text = title, FontSize = 18, FontWeight = FontWeights.Bold, TextTrimming = TextTrimming.CharacterEllipsis });
@@ -247,13 +311,19 @@ namespace IslandPlayer
                 {
                     CornerRadius = new CornerRadius(15), Padding = new Thickness(14, 6, 14, 7), Cursor = Cursors.Hand, VerticalAlignment = VerticalAlignment.Center,
                     Background = subbed ? Hex("#26FFFFFF") : _accent,
-                    Child = new TextBlock { Text = subbed ? L.T("Subskrybujesz ✓", "Subscribed ✓") : L.T("Subskrybuj", "Subscribe"), FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = subbed ? Brushes.White : Brushes.Black },
+                    Child = new TextBlock { Text = subbed ? L.T("Subskrybujesz", "Subscribed") : L.T("Subskrybuj", "Subscribe"), FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = subbed ? Brushes.White : Brushes.Black },
                 };
                 btn.MouseLeftButtonDown += (s, e) => e.Handled = true;
                 btn.MouseLeftButtonUp += (s, e) => { PodcastService.ToggleSubscribe(show); SetHeader(title, show); };
                 Grid.SetColumn(btn, 2);
                 _header.Children.Add(btn);
             }
+        }
+
+        private void GoBack()
+        {
+            string q = _search.Text.Trim();
+            if (q.Length >= 2) _ = Search(q); else _ = ShowTop();
         }
 
         // ================= elementy =================
@@ -284,13 +354,10 @@ namespace IslandPlayer
             return b;
         }
 
-        private FrameworkElement PlayDot()
+        private FrameworkElement PlayDot(out Path icon)
         {
-            return new Border
-            {
-                Width = 34, Height = 34, CornerRadius = new CornerRadius(17), Background = Hex("#1FFFFFFF"),
-                Child = new Path { Data = Geometry.Parse("M0,0 L10,6 L0,12 Z"), Fill = Brushes.White, Width = 10, Height = 12, Stretch = Stretch.Uniform, Margin = new Thickness(3, 0, 0, 0), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
-            };
+            icon = new Path { Data = Geometry.Parse(PlayGeo), Fill = Brushes.White, Width = 10, Height = 12, Stretch = Stretch.Uniform, Margin = new Thickness(3, 0, 0, 0), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            return new Border { Width = 34, Height = 34, CornerRadius = new CornerRadius(17), Background = Hex("#1FFFFFFF"), Child = icon };
         }
 
         private static Border Art(string url, double size, double radius)
