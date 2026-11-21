@@ -816,19 +816,27 @@ namespace IslandPlayer
             var labels = Labels(L.T("Połącz ze Spotify", "Connect Spotify"), sub);
             labels.Margin = new Thickness(0, 0, 150, 0);
             row.Children.Add(labels);
-            var btn = PillButton(SpotifyService.Connected ? L.T("Rozłącz", "Disconnect") : L.T("Połącz", "Connect"), !SpotifyService.Connected);
+            string idle = SpotifyService.Connected ? L.T("Rozłącz", "Disconnect") : L.T("Połącz", "Connect");
+            var btn = PillButton(SpotifyService.Connecting ? L.T("Anuluj", "Cancel") : idle, !SpotifyService.Connected);
             btn.HorizontalAlignment = HorizontalAlignment.Right;
             btn.VerticalAlignment = VerticalAlignment.Center;
-            bool busy = false;
             btn.MouseLeftButtonUp += async (s, e) =>
             {
-                if (busy) return;
+                // drugie kliknięcie w trakcie logowania = anuluj (port od razu wolny)
+                if (SpotifyService.Connecting) { SpotifyService.CancelConnect(); ((TextBlock)btn.Child).Text = idle; return; }
                 if (SpotifyService.Connected) { SpotifyService.Disconnect(); RefreshPage(); return; }
-                busy = true;
-                ((TextBlock)btn.Child).Text = L.T("Zaloguj się w przeglądarce…", "Sign in in your browser…");
+                if (!SpotifyService.Configured)
+                {
+                    // bez Client ID - od razu otwieramy stronę, skąd go wziąć
+                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://developer.spotify.com/dashboard") { UseShellExecute = true }); } catch { }
+                    MessageBox.Show(this, L.T("Utwórz aplikację na stronie Spotify, która się otworzyła, i wklej jej Client ID w pole poniżej.",
+                                              "Create an app on the Spotify page that just opened and paste its Client ID in the field below."),
+                                    "Spotify", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+                ((TextBlock)btn.Child).Text = L.T("Anuluj", "Cancel");
                 string err = await SpotifyService.ConnectAsync();
-                busy = false;
-                if (err != null) MessageBox.Show(this, err, "Spotify", MessageBoxButton.OK, MessageBoxImage.Warning);
+                if (!string.IsNullOrEmpty(err)) MessageBox.Show(this, err, "Spotify", MessageBoxButton.OK, MessageBoxImage.Warning);
                 RefreshPage();
             };
             row.Children.Add(btn);
@@ -841,25 +849,49 @@ namespace IslandPlayer
                 idRow.Children.Add(new TextBlock { Text = "Client ID", FontSize = 14, FontWeight = FontWeights.SemiBold });
                 idRow.Children.Add(new TextBlock
                 {
-                    Text = L.T("developer.spotify.com → Dashboard → Create app → Redirect URI: ", "developer.spotify.com → Dashboard → Create app → Redirect URI: ") + SpotifyService.RedirectUri +
-                           L.T(", zaznacz Web API → skopiuj Client ID tutaj", ", tick Web API → copy the Client ID here"),
+                    Text = L.T("1. developer.spotify.com → Create app   2. Redirect URI: wklej adres poniżej → Add, zaznacz Web API → Save   3. Skopiuj Client ID tutaj",
+                               "1. developer.spotify.com → Create app   2. Redirect URI: paste the address below → Add, tick Web API → Save   3. Copy the Client ID here"),
                     FontSize = 12, Foreground = TextSub, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 8),
                 });
+                // adres do wklejenia na stronie Spotify - z przyciskiem „Kopiuj”
+                var redirect = new Grid { Margin = new Thickness(0, 0, 0, 10) };
+                redirect.Children.Add(new TextBlock { Text = SpotifyService.RedirectUri, FontSize = 13, FontFamily = new FontFamily("Cascadia Mono, Consolas"), Foreground = _accentBrush, VerticalAlignment = VerticalAlignment.Center });
+                var copyUri = PillButton(L.T("Kopiuj", "Copy"), false);
+                copyUri.Padding = new Thickness(14, 4, 14, 5);
+                copyUri.HorizontalAlignment = HorizontalAlignment.Right;
+                copyUri.MouseLeftButtonUp += (s, e) =>
+                {
+                    try { Clipboard.SetText(SpotifyService.RedirectUri); ((TextBlock)copyUri.Child).Text = L.T("Skopiowano ✓", "Copied ✓"); } catch { }
+                };
+                redirect.Children.Add(copyUri);
+                idRow.Children.Add(redirect);
                 var box = new TextBox
                 {
                     Text = c.SpotifyClientId ?? "", FontSize = 13, FontFamily = new FontFamily("Cascadia Mono, Consolas"), Foreground = Brushes.White,
                     Background = Hex("#14FFFFFF"), BorderBrush = Hairline, BorderThickness = new Thickness(1), Padding = new Thickness(10, 6, 10, 6),
                     CaretBrush = Brushes.White,
                 };
-                box.LostFocus += (s, e) =>
+                var check = new TextBlock { FontSize = 11.5, Margin = new Thickness(0, 5, 0, 0) };
+                void Validate()
                 {
+                    string v = box.Text.Trim();
+                    check.Text = v.Length == 0 ? "" : SpotifyService.LooksLikeClientId(v) ? L.T("✓ Wygląda dobrze – kliknij „Połącz”", "✓ Looks good – click “Connect”")
+                                                                                     : L.T("Client ID ma 32 znaki (cyfry i litery a–f)", "A Client ID has 32 characters (digits and a–f)");
+                    check.Foreground = SpotifyService.LooksLikeClientId(v) ? (Brush)_accentBrush : Hex("#FF6B61");
+                }
+                // zapis od razu po wklejeniu (bez klikania gdzie indziej)
+                box.TextChanged += (s, e) =>
+                {
+                    Validate();
                     string v = box.Text.Trim();
                     if (v == (c.SpotifyClientId ?? "")) return;
                     c.SpotifyClientId = v;
                     if (SpotifyService.Connected) SpotifyService.Disconnect();     // inny Client ID = trzeba zalogować się od nowa
                     c.Save();
                 };
+                Validate();
                 idRow.Children.Add(box);
+                idRow.Children.Add(check);
                 var open = new TextBlock { Text = L.T("Otwórz developer.spotify.com ↗", "Open developer.spotify.com ↗"), FontSize = 12, Foreground = _accentBrush, Cursor = Cursors.Hand, Margin = new Thickness(0, 8, 0, 0) };
                 open.MouseLeftButtonUp += (s, e) =>
                 {

@@ -39,54 +39,109 @@ namespace IslandPlayer
         public static bool CanPlay => Connected && Premium;
 
         // ================= logowanie =================
+        private static TcpListener _listener;
+        private static System.Threading.CancellationTokenSource _connectCts;
+
+        /// <summary>Trwa logowanie (czekamy na powrót z przeglądarki).</summary>
+        public static bool Connecting => _connectCts != null;
+
+        /// <summary>Przerywa czekanie na logowanie i zwalnia port.</summary>
+        private static System.Threading.CancellationTokenSource _userCancelled;
+
+        public static void CancelConnect()
+        {
+            _userCancelled = _connectCts;
+            try { _connectCts?.Cancel(); } catch { }
+            try { _listener?.Stop(); } catch { }
+            _listener = null;
+        }
+
+        /// <summary>Client ID ze strony Spotify to 32 znaki 0-9 a-f.</summary>
+        public static bool LooksLikeClientId(string id) =>
+            !string.IsNullOrWhiteSpace(id) && id.Trim().Length == 32 && id.Trim().All(Uri.IsHexDigit);
+
         /// <summary>Otwiera logowanie Spotify w przeglądarce i czeka na powrót. Zwraca null albo opis błędu.</summary>
         public static async Task<string> ConnectAsync()
         {
             if (!Configured) return L.T("Najpierw wpisz Client ID.", "Enter a Client ID first.");
+            // poprzednia próba jeszcze czeka - kończymy ją, zamiast blokować port
+            CancelConnect();
+            var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromMinutes(2));
+            _connectCts = cts;
             string verifier = RandomUrlSafe(64), state = RandomUrlSafe(16);
             string challenge;
             using (var sha = SHA256.Create()) challenge = Base64Url(sha.ComputeHash(Encoding.ASCII.GetBytes(verifier)));
 
-            TcpListener listener;
+            TcpListener listener = null;
             try
             {
-                listener = new TcpListener(IPAddress.Loopback, Port);
-                listener.Start();
-            }
-            catch (Exception ex) { return L.T("Port " + Port + " jest zajęty: ", "Port " + Port + " is busy: ") + ex.Message; }
+                for (int attempt = 0; attempt < 5 && listener == null; attempt++)
+                {
+                    try
+                    {
+                        var l = new TcpListener(IPAddress.Loopback, Port);
+                        l.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+                        l.Start();
+                        listener = l;
+                    }
+                    catch (SocketException) { await Task.Delay(300); }
+                }
+                if (listener == null)
+                    return L.T("Port " + Port + " jest zajęty przez inny program. Zamknij go albo uruchom ponownie komputer.",
+                               "Port " + Port + " is used by another app. Close it or restart your PC.");
+                _listener = listener;
 
-            try
-            {
                 string url = "https://accounts.spotify.com/authorize?client_id=" + Uri.EscapeDataString(ClientId) +
                              "&response_type=code&redirect_uri=" + Uri.EscapeDataString(RedirectUri) +
                              "&code_challenge_method=S256&code_challenge=" + challenge +
                              "&state=" + state + "&scope=" + Uri.EscapeDataString(Scopes);
                 Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
 
-                // czekamy na powrót z przeglądarki (najwyżej 3 minuty)
-                var accept = listener.AcceptTcpClientAsync();
-                if (await Task.WhenAny(accept, Task.Delay(TimeSpan.FromMinutes(3))) != accept)
-                    return L.T("Nie dokończono logowania.", "Sign-in wasn't finished.");
-                using var client = await accept;
-                using var stream = client.GetStream();
-                var buf = new byte[8192];
-                int n = await stream.ReadAsync(buf, 0, buf.Length);
-                string request = Encoding.ASCII.GetString(buf, 0, n);
-                string path = request.Split(' ').Skip(1).FirstOrDefault() ?? "";
-                var q = ParseQuery(path.Contains('?') ? path.Substring(path.IndexOf('?') + 1) : "");
+                // czekamy na powrót z przeglądarki; przeglądarki otwierają też puste połączenia „na zapas” - pomijamy je
+                Dictionary<string, string> q = null;
+                while (q == null)
+                {
+                    TcpClient client;
+                    try { client = await listener.AcceptTcpClientAsync(cts.Token); }
+                    catch (OperationCanceledException) { return ReferenceEquals(_userCancelled, cts) ? "" : L.T("Nie dokończono logowania w 2 minuty.", "Sign-in wasn't finished within 2 minutes."); }
+                    catch (ObjectDisposedException) { return ""; }
+                    catch (SocketException) { return ""; }
+                    using (client)
+                    {
+                        var stream = client.GetStream();
+                        var buf = new byte[8192];
+                        int n;
+                        try
+                        {
+                            using var readCts = System.Threading.CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
+                            readCts.CancelAfter(TimeSpan.FromSeconds(3));
+                            n = await stream.ReadAsync(buf.AsMemory(0, buf.Length), readCts.Token);
+                        }
+                        catch { continue; }
+                        if (n <= 0) continue;
+                        string request = Encoding.ASCII.GetString(buf, 0, n);
+                        string path = request.Split(' ').Skip(1).FirstOrDefault() ?? "";
+                        if (!path.StartsWith("/callback"))
+                        {
+                            await Respond(stream, "404 Not Found", "");
+                            continue;
+                        }
+                        q = ParseQuery(path.Contains('?') ? path.Substring(path.IndexOf('?') + 1) : "");
+                        bool good = q.ContainsKey("code") && q.TryGetValue("state", out var st0) && st0 == state;
+                        string page = good
+                            ? L.T("Gotowe! Isabelle jest połączona ze Spotify. Możesz zamknąć tę kartę.", "Done! Isabelle is connected to Spotify. You can close this tab.")
+                            : L.T("Nie udało się połączyć. Wróć do Isabelle i spróbuj jeszcze raz.", "Couldn't connect. Go back to Isabelle and try again.");
+                        string html = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Isabelle</title></head>" +
+                                      "<body style=\"background:#111;color:#fff;font-family:Segoe UI,sans-serif;display:flex;align-items:center;justify-content:center;height:90vh\">" +
+                                      "<h2 style=\"font-weight:600\">" + WebUtility.HtmlEncode(page) + "</h2>" +
+                                      "<script>setTimeout(function(){window.close()},1500)</script></body></html>";
+                        await Respond(stream, "200 OK", html);
+                    }
+                }
+                try { listener.Stop(); } catch { }
 
-                bool ok = q.TryGetValue("code", out var code) && q.TryGetValue("state", out var st) && st == state;
-                string page = ok
-                    ? L.T("Połączono Isabelle ze Spotify. Możesz zamknąć tę kartę.", "Isabelle is connected to Spotify. You can close this tab.")
-                    : L.T("Nie udało się połączyć. Wróć do Isabelle i spróbuj jeszcze raz.", "Couldn't connect. Go back to Isabelle and try again.");
-                string html = "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Isabelle</title></head>" +
-                              "<body style=\"background:#111;color:#fff;font-family:Segoe UI,sans-serif;display:flex;align-items:center;justify-content:center;height:90vh\">" +
-                              "<h2 style=\"font-weight:600\">" + WebUtility.HtmlEncode(page) + "</h2></body></html>";
-                byte[] body = Encoding.UTF8.GetBytes(html);
-                byte[] head = Encoding.ASCII.GetBytes("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: " + body.Length + "\r\nConnection: close\r\n\r\n");
-                await stream.WriteAsync(head, 0, head.Length);
-                await stream.WriteAsync(body, 0, body.Length);
-                if (!ok) return q.TryGetValue("error", out var err) ? err : L.T("Logowanie przerwane.", "Sign-in cancelled.");
+                if (!q.TryGetValue("code", out var code) || !q.TryGetValue("state", out var st) || st != state)
+                    return q.TryGetValue("error", out var err) ? (err == "access_denied" ? L.T("Anulowano logowanie.", "Sign-in cancelled.") : err) : L.T("Logowanie przerwane.", "Sign-in cancelled.");
 
                 // kod → klucze
                 var tokens = await PostToken(new Dictionary<string, string>
@@ -99,6 +154,7 @@ namespace IslandPlayer
                 });
                 if (tokens == null) return L.T("Spotify nie wydał klucza.", "Spotify didn't issue a token.");
                 await LoadProfile();
+                BringIsabelleBack();
                 Changed?.Invoke();
                 return null;
             }
@@ -109,8 +165,37 @@ namespace IslandPlayer
             }
             finally
             {
-                try { listener.Stop(); } catch { }
+                try { listener?.Stop(); } catch { }
+                if (ReferenceEquals(_listener, listener)) _listener = null;
+                if (ReferenceEquals(_connectCts, cts)) _connectCts = null;
+                cts.Dispose();
             }
+        }
+
+        private static async Task Respond(NetworkStream stream, string status, string html)
+        {
+            try
+            {
+                byte[] body = Encoding.UTF8.GetBytes(html ?? "");
+                byte[] head = Encoding.ASCII.GetBytes("HTTP/1.1 " + status + "\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: " + body.Length + "\r\nConnection: close\r\n\r\n");
+                await stream.WriteAsync(head, 0, head.Length);
+                if (body.Length > 0) await stream.WriteAsync(body, 0, body.Length);
+            }
+            catch { }
+        }
+
+        /// <summary>Po zalogowaniu wracamy do okna ustawień Isabelle (przeglądarka zostaje w tle).</summary>
+        private static void BringIsabelleBack()
+        {
+            try
+            {
+                System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    foreach (System.Windows.Window w in System.Windows.Application.Current.Windows)
+                        if (w is SettingsWindow && w.IsVisible) { w.Activate(); break; }
+                }));
+            }
+            catch { }
         }
 
         public static void Disconnect()
