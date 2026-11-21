@@ -19,6 +19,8 @@ namespace IslandPlayer
         public string IslandBackgroundEffective => !string.IsNullOrEmpty(IslandBackground) ? IslandBackground : AlbumBackground ? "cover" : "none";
         /// <summary>Przenikanie utworów w Mojej muzyce (sekundy, 0 = wyłączone).</summary>
         public int Crossfade { get; set; }
+        /// <summary>Raz na dobę sprawdzaj nowe wydania najczęściej słuchanych wykonawców.</summary>
+        public bool NewReleases { get; set; } = true;
         /// <summary>Rozmyta okładka w tle powoli płynie (jak w Apple Music na Macu).</summary>
         public bool AnimatedBackground { get; set; } = true;
         public bool Glow { get; set; } = true;

@@ -2008,7 +2008,7 @@ namespace IslandPlayer
 
                 // ---- dodatki ----
                 var cfg = App.Config;
-                if (cfg.OverlayEnabled || cfg.DiscordEnabled) PublishState();
+                if (cfg.OverlayEnabled || cfg.DiscordEnabled || PartyServer.Running) PublishState();
                 if (_slowTicks % 4 == 0)
                 {
                     if (cfg.DiscordEnabled) _discord.Update(OverlayServer.State, cfg.DiscordLyrics);

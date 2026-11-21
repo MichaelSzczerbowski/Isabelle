@@ -66,6 +66,53 @@ namespace IslandPlayer
 
         // ================= pliki z dysku =================
 
+        /// <summary>Pozycja listy dla utworu - plik otwierany dopiero, gdy jest potrzebny (szybki start nawet przy tysiącach utworów).</summary>
+        private static MediaPlaybackItem MakeItem(LibraryTrack t)
+        {
+            var binder = new MediaBinder { Token = t.Path };
+            binder.Binding += OnBinding;
+            var item = new MediaPlaybackItem(MediaSource.CreateFromMediaBinder(binder));
+            var props = item.GetDisplayProperties();
+            props.Type = MediaPlaybackType.Music;
+            props.MusicProperties.Title = t.Title;
+            props.MusicProperties.Artist = t.Artist;
+            props.MusicProperties.AlbumTitle = t.Album ?? "";
+            item.ApplyDisplayProperties(props);
+            _tracks[item] = t;
+            return item;
+        }
+
+        // kolejka „zagraj następne” (tryb imprezy): kolejne dodane utwory ustawiają się za sobą
+        private static MediaPlaybackItem _queueAnchor;
+        private static int _queuedAhead;
+
+        /// <summary>Dodaje utwór jako następny (po wcześniej dodanych). Gdy nasz odtwarzacz nie gra listy - włącza go od razu.</summary>
+        public static void Enqueue(LibraryTrack t)
+        {
+            if (t == null) return;
+            var list = _list;
+            if (list == null || CurrentStation != null || PlayingPreview || CurrentTrack == null || list.CurrentItem == null)
+            {
+                PlayTracks(new[] { t }, 0, false);
+                return;
+            }
+            var cur = list.CurrentItem;
+            if (!ReferenceEquals(_queueAnchor, cur)) { _queueAnchor = cur; _queuedAhead = 0; }
+            var item = MakeItem(t);
+            int ci = list.Items.IndexOf(cur);
+            list.Items.Insert(Math.Min(list.Items.Count, ci + 1 + _queuedAhead), item);
+            if (list.ShuffleEnabled)
+            {
+                // przy losowaniu też ma zagrać jako następny
+                var order = new List<MediaPlaybackItem>(list.ShuffledItems);
+                order.Remove(item);
+                int si = order.IndexOf(cur);
+                order.Insert(Math.Min(order.Count, si + 1 + _queuedAhead), item);
+                list.SetShuffledItems(order);
+            }
+            _queuedAhead++;
+        }
+
         private static double _pendingSeek;
         private static int _playCountToken;
 
@@ -88,20 +135,12 @@ namespace IslandPlayer
             var list = new MediaPlaybackList { AutoRepeatEnabled = false, ShuffleEnabled = shuffle, MaxPlayedItemsToKeepOpen = 2 };
             _tracks.Clear();
             MediaPlaybackItem startItem = null;
+            _queueAnchor = null;
+            _queuedAhead = 0;
             for (int i = 0; i < tracks.Count; i++)
             {
                 var t = tracks[i];
-                // plik otwierany dopiero, gdy jest potrzebny (szybki start nawet przy tysiącach utworów)
-                var binder = new MediaBinder { Token = t.Path };
-                binder.Binding += OnBinding;
-                var item = new MediaPlaybackItem(MediaSource.CreateFromMediaBinder(binder));
-                var props = item.GetDisplayProperties();
-                props.Type = MediaPlaybackType.Music;
-                props.MusicProperties.Title = t.Title;
-                props.MusicProperties.Artist = t.Artist;
-                props.MusicProperties.AlbumTitle = t.Album ?? "";
-                item.ApplyDisplayProperties(props);
-                _tracks[item] = t;
+                var item = MakeItem(t);
                 list.Items.Add(item);
                 if (i == start) startItem = item;
             }

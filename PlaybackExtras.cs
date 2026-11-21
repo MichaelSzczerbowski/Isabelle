@@ -53,6 +53,7 @@ namespace IslandPlayer
             var c = App.Config;
             var want = TimeSpan.FromMilliseconds((c.NormalizeVolume || c.SmoothTransitions) && _island.Playing ? 50 : 500);
             if (_timer.Interval != want) _timer.Interval = want;
+            try { ListeningHistory.Tick(_island.Snapshot, _island.Playing); } catch (Exception ex) { Log.Info("historia: " + ex.Message); }
             try
             {
                 Screensaver();

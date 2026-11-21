@@ -539,6 +539,13 @@ namespace IslandPlayer
             link.Children.Add(copy);
             g.Children.Add(link);
 
+            // ---- nowości ----
+            var nr = Group(p, L.T("NOWOŚCI", "NEW RELEASES"));
+            Toggle(nr, L.T("Nowości od Twoich artystów", "New from your artists"),
+                L.T("raz na dobę sprawdza, czy najczęściej słuchani wykonawcy coś wydali – dymek przy zegarze i lista w Isabelle Wrapped",
+                    "checks once a day whether your most played artists released something – a notification and a list in Isabelle Wrapped"),
+                c.NewReleases, v => c.NewReleases = v);
+
             // ---- Spotify ----
             SpotifyGroup(p);
 

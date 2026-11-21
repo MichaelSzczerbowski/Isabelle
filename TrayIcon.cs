@@ -15,7 +15,8 @@ namespace IslandPlayer
         [DllImport("user32.dll")]
         private static extern bool DestroyIcon(IntPtr handle);
 
-        private readonly WinForms.ToolStripMenuItem _settingsItem, _autoItem, _updateItem, _quitItem, _libraryItem, _bugItem;
+        private readonly WinForms.ToolStripMenuItem _settingsItem, _autoItem, _updateItem, _quitItem, _libraryItem, _bugItem, _wrappedItem, _partyItem;
+        private Action _balloonClick;       // co robi kliknięcie dymka (aktualizacja / nowość)
 
         public TrayIcon()
         {
@@ -25,11 +26,15 @@ namespace IslandPlayer
             _settingsItem = new WinForms.ToolStripMenuItem("", null, (s, e) => App.ShowSettings());
             _libraryItem = new WinForms.ToolStripMenuItem("", null, (s, e) => LibraryWindow.ShowWindow());
             _bugItem = new WinForms.ToolStripMenuItem("", null, (s, e) => BugReportWindow.ShowWindow());
+            _wrappedItem = new WinForms.ToolStripMenuItem("", null, (s, e) => WrappedWindow.ShowWindow());
+            _partyItem = new WinForms.ToolStripMenuItem("", null, (s, e) => PartyWindow.ShowWindow());
             _autoItem = new WinForms.ToolStripMenuItem("") { CheckOnClick = true };
             _autoItem.Click += (s, e) => Autostart.Set(_autoItem.Checked);
             _quitItem = new WinForms.ToolStripMenuItem("", null, (s, e) => App.Quit());
             menu.Items.Add(_updateItem);
             menu.Items.Add(_libraryItem);
+            menu.Items.Add(_wrappedItem);
+            menu.Items.Add(_partyItem);
             menu.Items.Add(_settingsItem);
             menu.Items.Add(_autoItem);
             menu.Items.Add(_bugItem);
@@ -49,7 +54,8 @@ namespace IslandPlayer
             {
                 if (e.Button == WinForms.MouseButtons.Left) App.ShowSettings();
             };
-            _icon.BalloonTipClicked += async (s, e) => await UpdateService.InstallAsync(UpdateService.Available);
+            _icon.BalloonTipClicked += (s, e) => _balloonClick?.Invoke();
+            NewReleases.Found += r => App.Current?.Dispatcher.BeginInvoke(new Action(() => ShowRelease(r)));
         }
 
         private void RefreshMenu()
@@ -60,6 +66,8 @@ namespace IslandPlayer
             _settingsItem.Text = L.T("Ustawienia", "Settings");
             _libraryItem.Text = L.T("Moja muzyka i radio", "My music and radio");
             _bugItem.Text = L.T("Zgłoś błąd…", "Report a bug…");
+            _wrappedItem.Text = "Isabelle Wrapped";
+            _partyItem.Text = PartyServer.Running ? L.T("Tryb imprezy (włączony)", "Party mode (on)") : L.T("Tryb imprezy", "Party mode");
             _autoItem.Text = L.T("Uruchamiaj z Windows", "Start with Windows");
             _autoItem.Checked = Autostart.IsEnabled;
             _quitItem.Text = L.T("Zamknij", "Quit");
@@ -70,9 +78,19 @@ namespace IslandPlayer
         {
             if (info == null) return;
             RefreshMenu();
+            _balloonClick = async () => await UpdateService.InstallAsync(UpdateService.Available);
             _icon.ShowBalloonTip(8000, "Isabelle " + info.Version.ToString(3),
                 L.T("Dostępna nowa wersja. Kliknij, aby zaktualizować.", "A new version is available. Click to update."),
                 WinForms.ToolTipIcon.Info);
+        }
+
+        /// <summary>Dymek „nowość od Twojego artysty” (kliknięcie = otwórz w Spotify).</summary>
+        public void ShowRelease(Release r)
+        {
+            if (r == null) return;
+            _balloonClick = () => NewReleases.Open(r);
+            _icon.ShowBalloonTip(8000, (r.Single ? L.T("Nowy singiel: ", "New single: ") : L.T("Nowy album: ", "New album: ")) + r.Artist,
+                r.Album + L.T(" - kliknij, aby posłuchać", " - click to listen"), WinForms.ToolTipIcon.Info);
         }
 
         /// <summary>Czarna "wyspa" z zieloną kropką, rysowana w kodzie (bez plików graficznych).</summary>

@@ -21,6 +21,10 @@ A tiny black pill at the top of your screen that shows what's playing and grows 
 | 🎚️ | 10-band equalizer with presets for My music | 10-pasmowy korektor z gotowymi ustawieniami dla Mojej muzyki |
 | ✨ | Smart playlists: most played, recently added, not played lately | Inteligentne playlisty: najczęściej grane, ostatnio dodane, dawno niesłuchane |
 | 📂 | Watch a folder (e.g. Downloads) — new music joins your library automatically | Śledzenie folderu (np. Pobrane) — nowa muzyka sama trafia do biblioteki |
+| 🎉 | **Party mode** — guests scan a QR code and add songs to the queue from their phones (My music and Spotify) | **Tryb imprezy** — goście skanują kod QR i dodają piosenki do kolejki z telefonu (Moja muzyka i Spotify) |
+| 📊 | **Isabelle Wrapped** — your listening stats from every player | **Isabelle Wrapped** — statystyki słuchania ze wszystkich odtwarzaczy |
+| 🆕 | New releases from your most played artists | Nowości od najczęściej słuchanych wykonawców |
+| 🔀 | Crossfade in My music, liquid glass island background | Przenikanie utworów w Mojej muzyce, tło wyspy liquid glass |
 | 🐞 | Report a bug straight from the app, "What's new" screen after each update | Zgłaszanie błędów z aplikacji, ekran „Co nowego” po aktualizacji |
 | 🖼️ | Real album art (Spotify logo bar removed automatically) | Prawdziwe okładki (pasek z logo Spotify wycinany automatycznie) |
 | 🌈 | Animated blurred album background and glow in the cover's color, like Apple Music | Ruchome, rozmyte tło z okładki i poświata w jej kolorze |

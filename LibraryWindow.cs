@@ -387,6 +387,14 @@ namespace IslandPlayer
                 };
                 _side.Children.Add(smart);
             }
+            // okna: statystyki i impreza
+            var wrapped = SideItem("Isabelle Wrapped", -1, null, "M3,21 V13 H7 V21 Z M10,21 V3 H14 V21 Z M17,21 V9 H21 V21 Z");
+            wrapped.MouseLeftButtonUp += (s, e) => WrappedWindow.ShowWindow();
+            _side.Children.Add(wrapped);
+            var party = SideItem(PartyServer.Running ? L.T("Tryb imprezy · włączony", "Party mode · on") : L.T("Tryb imprezy", "Party mode"), -1, null,
+                "M12,2 L14.5,8 L21,8.5 L16,12.8 L17.6,19.5 L12,15.9 L6.4,19.5 L8,12.8 L3,8.5 L9.5,8 Z");
+            party.MouseLeftButtonUp += (s, e) => PartyWindow.ShowWindow();
+            _side.Children.Add(party);
             _side.Children.Add(new TextBlock { Text = L.T("Playlisty", "Playlists"), FontSize = 12, Foreground = TextSub, Margin = new Thickness(12, 16, 0, 4) });
             foreach (var pl in PlaylistStore.Playlists)
             {

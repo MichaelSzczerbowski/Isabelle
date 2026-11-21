@@ -87,6 +87,7 @@ namespace IslandPlayer
             WhatsNewWindow.ShowIfUpdated();
             Equalizer.Load();
             LibraryService.StartWatching();
+            NewReleases.Start();
 
             UpdateService.Found += info => Current.Dispatcher.BeginInvoke(new Action(() => _tray?.ShowUpdate(info)));
             _ = UpdateLoopAsync();
@@ -213,6 +214,8 @@ namespace IslandPlayer
             try { _tray?.Dispose(); } catch { }
             try { Island?.Cleanup(); } catch { }
             try { LocalPlayer.Dispose(); } catch { }
+            try { ListeningHistory.Save(); } catch { }
+            try { PartyServer.Stop(); } catch { }
             base.OnExit(e);
         }
     }
