@@ -25,9 +25,14 @@ h1{font-size:28px;margin:8px 2px 14px;font-weight:800;letter-spacing:-.4px}
 h2{font-size:15px;color:#ffffffb0;margin:22px 4px 8px;font-weight:650}
 .sub{color:var(--sub);font-size:13px}
 /* pasek zakładek jak wyspa: pływająca szklana pigułka */
-.tabs{position:fixed;left:14px;right:14px;bottom:calc(12px + env(safe-area-inset-bottom));display:flex;justify-content:space-around;padding:8px 6px;background:var(--tbar);border:1px solid var(--glassb);border-radius:28px;z-index:5;max-width:530px;margin:0 auto;box-shadow:0 8px 24px #0005}
-.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;color:#ffffff80;background:none;border:0;padding:4px 0}
-.tab svg{width:24px;height:24px}.tab.on{color:#fff}.tab.on svg{color:var(--ac)}
+/* pasek zakładek jak wyspa: czarna pigułka, aktywna zakładka rozwija się z nazwą */
+.tabs{position:fixed;left:0;right:0;bottom:calc(14px + env(safe-area-inset-bottom));width:max-content;margin:0 auto;display:flex;gap:4px;padding:6px;background:#000;border-radius:30px;z-index:5;box-shadow:0 10px 30px #0007,inset 0 0 0 1px #ffffff12}
+.tab{display:flex;align-items:center;gap:0;height:44px;padding:0 13px;border:0;border-radius:22px;background:none;color:#ffffff73;font-size:14px;font-weight:650;white-space:nowrap;transition:background .3s,color .3s,gap .3s,padding .3s}
+.tab svg{width:24px;height:24px;flex:none;transition:transform .3s}
+.tab span{max-width:0;overflow:hidden;opacity:0;transition:max-width .35s cubic-bezier(.2,.8,.2,1),opacity .25s}
+.tab.on{background:#ffffff1f;color:#fff;gap:8px;padding:0 16px 0 13px}
+.tab.on span{max-width:110px;opacity:1}
+.tab:active svg{transform:scale(.88)}
 .seg{display:flex;background:var(--glass);border:1px solid var(--glassb);border-radius:18px;padding:4px;gap:4px;margin:6px 0 14px}
 .seg button{flex:1;border:0;background:none;color:#fff;font-size:13px;font-weight:650;padding:9px 8px;border-radius:15px}
 .seg button.on{background:#fff;color:#000}
@@ -44,8 +49,6 @@ h2{font-size:15px;color:#ffffffb0;margin:22px 4px 8px;font-weight:650}
 .ctr svg{width:34px;height:34px}
 .big{width:72px;height:72px;border-radius:36px;background:#fff!important;color:#000!important;display:flex;align-items:center;justify-content:center}
 .big svg{width:30px;height:30px}
-.vol{display:flex;align-items:center;gap:12px;color:var(--sub)}
-.vol svg{width:18px;height:18px;flex:none}
 input[type=range]{flex:1;-webkit-appearance:none;appearance:none;height:5px;border-radius:3px;background:#ffffff26;outline:none}
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:11px;background:#fff;box-shadow:0 2px 6px #0006}
 .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#fff;background:var(--glass);border:1px solid var(--glassb);border-radius:12px;padding:5px 11px}
@@ -83,7 +86,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
 .back{display:inline-flex;align-items:center;gap:6px;background:var(--glass);border:1px solid var(--glassb);color:#fff;border-radius:16px;padding:8px 14px;font-size:14px;margin:4px 0 10px}
 .btn.ghost{background:var(--glass);border:1px solid var(--glassb)}
 /* mini odtwarzacz nad zakładkami (na innych zakładkach) */
-#mini{position:fixed;left:14px;right:14px;bottom:calc(84px + env(safe-area-inset-bottom));max-width:530px;margin:0 auto;display:none;align-items:center;gap:12px;padding:8px 10px 8px 8px;background:var(--tbar);border:1px solid var(--glassb);border-radius:20px;z-index:5;box-shadow:0 10px 30px #0005}
+#mini{position:fixed;left:14px;right:14px;bottom:calc(80px + env(safe-area-inset-bottom));max-width:530px;margin:0 auto;display:none;align-items:center;gap:12px;padding:8px 10px 8px 8px;background:var(--tbar);border:1px solid var(--glassb);border-radius:20px;z-index:5;box-shadow:0 10px 30px #0005}
 #mini .art{width:44px;height:44px}
 #mini button{background:#fff;border:0;width:40px;height:40px;border-radius:20px;display:flex;align-items:center;justify-content:center;flex:none}
 #mini button svg{width:18px;height:18px}
@@ -109,7 +112,6 @@ body.mini main{padding-bottom:calc(176px + env(safe-area-inset-bottom))}
       <button id="bplay" class="big" aria-label="Pauza"><svg viewBox="0 0 24 24" fill="currentColor" id="iplay"><path d="M7 4l13 8-13 8z"/></svg></button>
       <button id="bnext" aria-label="Następny"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 5l11 7-11 7z"/></svg></button>
     </div>
-    <div class="vol" id="volrow"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9v6h4l5 4V5L8 9z"/></svg><input type="range" id="vol" min="0" max="100" value="50"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9v6h4l5 4V5L8 9zm11.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM13 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg></div>
     <div class="lyr" id="lyr" style="display:none"></div>
   </section>
 
@@ -137,10 +139,10 @@ body.mini main{padding-bottom:calc(176px + env(safe-area-inset-bottom))}
 </main>
 
 <nav class="tabs">
-  <button class="tab on" data-p="now"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>Teraz</button>
-  <button class="tab" data-p="lib"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>Biblioteka</button>
-  <button class="tab" data-p="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Szukaj</button>
-  <button class="tab" data-p="more"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V12M10 20V4M16 20v-6M22 20H2"/></svg>Więcej</button>
+  <button class="tab on" data-p="now" aria-label="Teraz"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="1.5" y="6.5" width="21" height="11" rx="5.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="7" y="10" width="2" height="4" rx="1"/><rect x="11" y="8.8" width="2" height="6.4" rx="1"/><rect x="15" y="10.6" width="2" height="2.8" rx="1"/></svg><span>Teraz</span></button>
+  <button class="tab" data-p="lib" aria-label="Biblioteka"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2.5" y="4" width="12" height="16" rx="3.5"/><path d="M14.5 6.2a6.5 6.5 0 1 1 0 11.6" stroke-linecap="round"/><circle cx="8.5" cy="12" r="2.2" fill="currentColor" stroke="none"/></svg><span>Biblioteka</span></button>
+  <button class="tab" data-p="search" aria-label="Szukaj"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="7"/><path d="M20.5 20.5l-4.6-4.6"/><path d="M7.2 9a3.6 3.6 0 0 1 2.6-2.4" stroke-width="1.8" opacity=".7"/></svg><span>Szukaj</span></button>
+  <button class="tab" data-p="more" aria-label="Więcej"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="8" height="8" rx="2.8"/><rect x="13" y="3" width="8" height="8" rx="4" opacity=".55"/><rect x="3" y="13" width="8" height="8" rx="4" opacity=".55"/><rect x="13" y="13" width="8" height="8" rx="2.8"/></svg><span>Więcej</span></button>
 </nav>
 <div id="mini"><div class="art" id="mcv"></div><div class="x"><div class="t1" id="mtt"></div><div class="t2" id="mta"></div></div><button id="mplay" aria-label="Pauza"><svg viewBox="0 0 24 24" fill="#000" id="miplay"><path d="M7 4l13 8-13 8z"/></svg></button></div>
 <div id="toast"></div>
@@ -172,7 +174,7 @@ if (EN) {
   document.querySelector('#p-more h1').textContent = 'More';
   document.querySelector('#mseg [data-v=party]').textContent = 'Party'; document.querySelector('#mseg [data-v=info]').textContent = 'App';
   const names = { now: 'Now', lib: 'Library', search: 'Search', more: 'More' };
-  document.querySelectorAll('.tab').forEach(b => b.lastChild.textContent = names[b.dataset.p]);
+  document.querySelectorAll('.tab').forEach(b => { b.lastChild.textContent = names[b.dataset.p]; b.setAttribute('aria-label', names[b.dataset.p]); });
 }
 
 // ---------- zakładki ----------
@@ -194,7 +196,6 @@ function setMode(m) {
   document.querySelectorAll('#mode button').forEach(b => b.classList.toggle('on', b.dataset.m === m));
   $('lyr').style.display = 'none'; lastLyr = '';
   if (m === 'pc') { au.pause(); } else { $('offline').style.display = 'none'; }
-  $('volrow').style.display = (m === 'phone' && isIOS) ? 'none' : 'flex';
   renderPhone();
 }
 document.querySelectorAll('#mode button').forEach(b => b.onclick = () => setMode(b.dataset.m));
@@ -269,7 +270,6 @@ async function poll() {
     setAccent(n.accent);
     if (n.cover !== lastCover) { lastCover = n.cover; setCover(n.cover ? U('/api/cover', 'v=' + encodeURIComponent(n.cover)) : ''); }
     playIcon(n.playing);
-    if (Date.now() - volBusy > 1500) $('vol').value = n.vol;
     if (n.lyricsKey !== lastLyr) { lastLyr = n.lyricsKey; loadLyrics(); }
   } catch (e) { $('offline').style.display = 'block'; }
 }
@@ -314,11 +314,6 @@ $('bplay').onclick = () => {
 };
 $('bnext').onclick = () => mode === 'pc' ? cmd('next') : phoneNext(1);
 $('bprev').onclick = () => mode === 'pc' ? cmd('prev') : phoneNext(-1);
-$('vol').oninput = e => {
-  volBusy = Date.now();
-  if (mode === 'pc') { clearTimeout($('vol').h); $('vol').h = setTimeout(() => cmd('vol', e.target.value), 80); }
-  else au.volume = e.target.value / 100;
-};
 // przewijanie: dotknij / przeciągnij pasek
 (() => {
   const el = $('prog'); let drag = false;
