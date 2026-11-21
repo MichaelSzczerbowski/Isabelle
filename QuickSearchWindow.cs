@@ -246,6 +246,7 @@ namespace IslandPlayer
         /// </summary>
         private static async Task<List<Result>> OnlineSongs(string q)
         {
+            if (SpotifyService.Connected) await SpotifyService.EnsureProfileAsync();
             bool spotify = SpotifyService.CanPlay;
             string cacheKey = (spotify ? "s:" : "i:") + q;
             lock (SongCache) { if (SongCache.TryGetValue(cacheKey, out var hit)) return CloneResults(hit); }

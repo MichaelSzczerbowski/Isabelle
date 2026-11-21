@@ -22,7 +22,7 @@ namespace IslandPlayer
         public const string DefaultClientId = "";
         public const int Port = 43821;
         public const string RedirectUri = "http://127.0.0.1:43821/callback";
-        private const string Scopes = "user-modify-playback-state user-read-playback-state";
+        private const string Scopes = "user-modify-playback-state user-read-playback-state user-read-private";
 
         private static readonly HttpClient Http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
         private static string _access;
@@ -209,14 +209,26 @@ namespace IslandPlayer
             Changed?.Invoke();
         }
 
+        private static bool _profileChecked;
+
         private static async Task LoadProfile()
         {
+            _profileChecked = true;
             using var doc = await Api(HttpMethod.Get, "https://api.spotify.com/v1/me");
             if (doc == null) return;
             var r = doc.RootElement;
             App.Config.SpotifyUser = r.TryGetProperty("display_name", out var dn) && dn.ValueKind == JsonValueKind.String ? dn.GetString() : "";
-            App.Config.SpotifyPremium = r.TryGetProperty("product", out var pr) && pr.GetString() == "premium";
+            // rodzaj konta widać tylko z uprawnieniem user-read-private (starsze połączenia go nie mają) -
+            // gdy nie wiadomo, zakładamy Premium; Spotify i tak odmówi (403) bez Premium i wtedy to zapamiętamy
+            App.Config.SpotifyPremium = !r.TryGetProperty("product", out var pr) || pr.ValueKind != JsonValueKind.String || pr.GetString() == "premium";
             App.Config.Save();
+        }
+
+        /// <summary>Raz na uruchomienie odświeża dane konta (np. ktoś kupił Premium albo połączył się starszą wersją).</summary>
+        public static async Task EnsureProfileAsync()
+        {
+            if (_profileChecked || !Connected) return;
+            try { await LoadProfile(); Changed?.Invoke(); } catch (Exception ex) { Log.Info("spotify profil: " + ex.Message); }
         }
 
         // ================= klucze =================
@@ -313,7 +325,14 @@ namespace IslandPlayer
                 string body = "{\"uris\":[\"" + uri + "\"]}";
                 var (status, text) = await Send(HttpMethod.Put, "https://api.spotify.com/v1/me/player/play", body);
                 if (status >= 200 && status < 300) return null;
-                if (status == 403) return L.T("Spotify pozwala na to tylko z kontem Premium.", "Spotify only allows this with Premium.");
+                if (status == 403)
+                {
+                    // konto bez Premium - od teraz szybkie wyszukiwanie gra fragmenty
+                    App.Config.SpotifyPremium = false;
+                    App.Config.Save();
+                    Changed?.Invoke();
+                    return L.T("Spotify pozwala na to tylko z kontem Premium.", "Spotify only allows this with Premium.");
+                }
                 if (status != 404) return "Spotify: " + status;
 
                 // brak aktywnego urządzenia
