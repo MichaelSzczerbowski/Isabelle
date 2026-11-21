@@ -34,7 +34,62 @@ namespace IslandPlayer
             _current = new FullscreenPlayer { _screensaver = screensaver };
             _current.Closed += (s, e) => _current = null;
             _current.Show();
+            if (screensaver)
+            {
+                // wygaszacz: okno na wierzch z fokusem i kursor znika od razu (bez czekania na ruch myszy)
+                ForceForeground(new System.Windows.Interop.WindowInteropHelper(_current).Handle);
+                _current.HideCursor();
+            }
             _current.Activate();
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern int ShowCursor(bool show);
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern IntPtr SetCursor(IntPtr cursor);
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hWnd, IntPtr pid);
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool attach);
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hWnd);
+        [System.Runtime.InteropServices.DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
+
+        private static void ForceForeground(IntPtr hwnd)
+        {
+            try
+            {
+                uint fg = GetWindowThreadProcessId(GetForegroundWindow(), IntPtr.Zero), me = GetCurrentThreadId();
+                if (fg != 0 && fg != me)
+                {
+                    AttachThreadInput(me, fg, true);
+                    SetForegroundWindow(hwnd);
+                    AttachThreadInput(me, fg, false);
+                }
+                else SetForegroundWindow(hwnd);
+            }
+            catch { }
+        }
+
+        private int _hiddenCount;
+
+        /// <summary>Chowa kursor myszy na czas wygaszacza (wraca po zamknięciu).</summary>
+        private void HideCursor()
+        {
+            try
+            {
+                Mouse.OverrideCursor = Cursors.None;
+                SetCursor(IntPtr.Zero);
+                // licznik widoczności kursora poniżej zera = kursor schowany
+                while (ShowCursor(false) >= 0 && _hiddenCount < 10) _hiddenCount++;
+                _hiddenCount++;
+            }
+            catch { }
+            Closed += (s, e) =>
+            {
+                try
+                {
+                    Mouse.OverrideCursor = null;
+                    for (; _hiddenCount > 0; _hiddenCount--) ShowCursor(true);
+                }
+                catch { }
+            };
         }
 
         private readonly IslandWindow _island = App.Island;
