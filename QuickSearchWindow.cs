@@ -27,9 +27,33 @@ namespace IslandPlayer
             _current = new QuickSearchWindow();
             _current.Closed += (s, e) => _current = null;
             _current.Show();
+            // otwarte kliknięciem w wyspę (która nie przejmuje fokusu) - wyciągamy okno na wierzch z klawiaturą
+            ForceForeground(new System.Windows.Interop.WindowInteropHelper(_current).Handle);
             _current.Activate();
             _current._box.Focus();
             Keyboard.Focus(_current._box);
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hWnd, IntPtr pid);
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool attach);
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hWnd);
+        [System.Runtime.InteropServices.DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
+
+        private static void ForceForeground(IntPtr hwnd)
+        {
+            try
+            {
+                uint fg = GetWindowThreadProcessId(GetForegroundWindow(), IntPtr.Zero), me = GetCurrentThreadId();
+                if (fg != 0 && fg != me)
+                {
+                    AttachThreadInput(me, fg, true);
+                    SetForegroundWindow(hwnd);
+                    AttachThreadInput(me, fg, false);
+                }
+                else SetForegroundWindow(hwnd);
+            }
+            catch { }
         }
 
         private sealed class Result

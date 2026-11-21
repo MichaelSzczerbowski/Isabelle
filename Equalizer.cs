@@ -91,7 +91,6 @@ namespace IslandPlayer
             if (p == null) UserPresets.Add(p = new EqUserPreset { Name = name });
             p.Gains = Gains;
             App.Config.EqPreset = UserPrefix + p.Name;
-            App.Config.EqCustom = Gains;
             App.Config.Save();
             Bump();
         }
@@ -123,12 +122,19 @@ namespace IslandPlayer
 
         public static void SetPreset(string key)
         {
+            if (key == "custom")
+            {
+                // kafelek „Własne”: ostatnie ustawienie suwaków (pamiętane osobno od gotowców)
+                App.Config.EqPreset = "custom";
+                App.Config.Save();
+                Apply(App.Config.EqCustom);
+                return;
+            }
             if (key != null && key.StartsWith(UserPrefix))
             {
                 var u = FindUser(key.Substring(UserPrefix.Length));
                 if (u == null) return;
                 App.Config.EqPreset = UserPrefix + u.Name;
-                App.Config.EqCustom = (double[])(u.Gains ?? new double[10]).Clone();
                 App.Config.Save();
                 Apply(u.Gains);
                 return;
@@ -137,7 +143,6 @@ namespace IslandPlayer
             {
                 if (p.key != key) continue;
                 App.Config.EqPreset = key;
-                App.Config.EqCustom = (double[])p.gains.Clone();
                 App.Config.Save();
                 Apply(p.gains);
                 return;

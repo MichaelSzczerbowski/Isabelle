@@ -77,7 +77,9 @@ namespace IslandPlayer
                     string k = p.key;
                     chips.Children.Add(Chip(L.T(p.pl, p.en), k == key, accent, () => Equalizer.SetPreset(k)));
                 }
-                // własne gotowce - z gwiazdką, żeby odróżniały się od wbudowanych
+                // „Własne” - Twoje ustawienie suwaków; ruszenie suwaka zawsze zapisuje się tutaj
+                chips.Children.Add(Chip(L.T("Własne", "Custom"), key == "custom", accent, () => Equalizer.SetPreset("custom")));
+                // nazwane własne gotowce - z gwiazdką
                 foreach (var u in Equalizer.UserPresets)
                 {
                     string k = Equalizer.UserPrefix + u.Name;
@@ -87,9 +89,9 @@ namespace IslandPlayer
                 actions.Children.Clear();
                 if (key == "custom")
                 {
-                    actions.Children.Add(new TextBlock { Text = L.T("Własne ustawienie", "Custom"), FontSize = 11.5, Foreground = Hex("#80FFFFFF"), VerticalAlignment = VerticalAlignment.Center });
+                    actions.Children.Add(new TextBlock { Text = L.T("Przesuń suwaki po swojemu - zapisują się same.", "Move the sliders - changes are saved automatically."), FontSize = 11.5, Foreground = Hex("#80FFFFFF"), VerticalAlignment = VerticalAlignment.Center });
                     actions.Children.Add(Dot());
-                    actions.Children.Add(Link(L.T("Zapisz jako…", "Save as…"), accent, () =>
+                    actions.Children.Add(Link(L.T("Zapisz pod nazwą…", "Save with a name…"), accent, () =>
                     {
                         string n = AskName(L.T("Nazwa ustawienia korektora", "Equalizer preset name"), "", L.T("Zapisz", "Save"));
                         if (!string.IsNullOrWhiteSpace(n)) Equalizer.SaveUserPreset(n);

@@ -125,6 +125,10 @@ namespace IslandPlayer
             LyricsBtn.Click += (s, e) => ToggleLyrics();
             BuildLibraryHandle();
             FullBtn.Click += (s, e) => FullscreenPlayer.Toggle();
+            SearchBtn.MouseEnter += (s, e) => { SearchBtn.Opacity = 1; SearchBtn.Background = new SolidColorBrush(Color.FromArgb(0x26, 255, 255, 255)); };
+            SearchBtn.MouseLeave += (s, e) => { SearchBtn.Opacity = 0.7; SearchBtn.Background = Brushes.Transparent; };
+            SearchBtn.MouseLeftButtonDown += (s, e) => e.Handled = true;
+            SearchBtn.MouseLeftButtonUp += (s, e) => { e.Handled = true; QuickSearchWindow.Toggle(); };
             ArtHost.Cursor = Cursors.Hand;
             ArtHost.MouseLeftButtonDown += (s, e) => { if (_expanded && _snap != null) e.Handled = true; };
             ArtHost.MouseLeftButtonUp += (s, e) =>
@@ -328,6 +332,7 @@ namespace IslandPlayer
             ToastLabel.Text = ToastVLabel.Text = L.T("TERAZ GRA", "NOW PLAYING");
             LyricsBtn.ToolTip = L.T("Tekst piosenki", "Lyrics");
             FullBtn.ToolTip = L.T("Pełny ekran", "Full screen");
+            SearchBtn.ToolTip = L.T("Szukaj muzyki i radia", "Search music and radio");
             AppBtn.ToolTip = L.T("Przełącz odtwarzacz", "Switch player");
             if (_snap != null) AppText.Text = MediaService.PrettyAppName(_snap.AppId);
         }
