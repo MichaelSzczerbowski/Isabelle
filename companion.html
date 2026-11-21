@@ -16,18 +16,30 @@
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%;background:var(--bg);color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;overscroll-behavior:none}
 body{padding-top:env(safe-area-inset-top)}
-#bgc{position:fixed;inset:-20%;z-index:-1;background-size:cover;background-position:center;filter:blur(60px) saturate(1.4);opacity:.45;transition:background-image .6s}
-#bgc::after{content:'';position:absolute;inset:0;background:linear-gradient(#0b0b0d55,#0b0b0dee 70%)}
-main{padding:12px 18px calc(96px + env(safe-area-inset-bottom));max-width:560px;margin:0 auto}
+/* „liquid glass” jak w Mojej muzyce na komputerze: rozmyte kolory z okładki, które powoli płyną */
+#glass{position:fixed;inset:0;z-index:-2;overflow:hidden;background:#101014}
+#glass i{position:absolute;width:85vmax;height:85vmax;border-radius:50%;filter:blur(70px);opacity:.75;will-change:transform;transition:background 1.2s ease}
+#glass i:nth-child(1){background:var(--c1);left:-35vmax;top:-30vmax;animation:d1 26s ease-in-out infinite alternate}
+#glass i:nth-child(2){background:var(--c2);right:-40vmax;top:-10vmax;animation:d2 33s ease-in-out infinite alternate}
+#glass i:nth-child(3){background:var(--c3);left:-20vmax;bottom:-45vmax;animation:d3 39s ease-in-out infinite alternate}
+#glass i:nth-child(4){background:var(--c4);right:-30vmax;bottom:-35vmax;animation:d4 45s ease-in-out infinite alternate;opacity:.6}
+@keyframes d1{to{transform:translate(18vmax,22vmax) rotate(140deg) scale(1.15)}}
+@keyframes d2{to{transform:translate(-22vmax,18vmax) rotate(-120deg) scale(.9)}}
+@keyframes d3{to{transform:translate(20vmax,-24vmax) rotate(100deg) scale(1.2)}}
+@keyframes d4{to{transform:translate(-16vmax,-18vmax) rotate(-160deg) scale(1.05)}}
+#glass::after{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 30%,#0000 0%,#00000059 70%),linear-gradient(#0000001f,#00000073)}
+:root{--c1:#ff5ca0;--c2:#8a5cff;--c3:#ff8a5c;--c4:#5cb8ff;--glass:rgba(0,0,0,.22);--glassb:rgba(255,255,255,.09)}
+main{padding:12px 18px calc(112px + env(safe-area-inset-bottom));max-width:560px;margin:0 auto}
 .page{display:none}.page.on{display:block}
 h1{font-size:28px;margin:8px 2px 14px;font-weight:800;letter-spacing:-.4px}
 h2{font-size:15px;color:#ffffffb0;margin:22px 4px 8px;font-weight:650}
 .sub{color:var(--sub);font-size:13px}
-.tabs{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:space-around;padding:8px 8px calc(8px + env(safe-area-inset-bottom));background:#0b0b0dd9;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-top:1px solid var(--line);z-index:5}
+/* pasek zakładek jak wyspa: pływająca szklana pigułka */
+.tabs{position:fixed;left:14px;right:14px;bottom:calc(12px + env(safe-area-inset-bottom));display:flex;justify-content:space-around;padding:8px 6px;background:rgba(18,18,22,.55);backdrop-filter:blur(30px) saturate(1.4);-webkit-backdrop-filter:blur(30px) saturate(1.4);border:1px solid var(--glassb);border-radius:28px;z-index:5;max-width:530px;margin:0 auto;box-shadow:0 10px 30px #0006}
 .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;color:#ffffff80;background:none;border:0;padding:4px 0}
 .tab svg{width:24px;height:24px}.tab.on{color:#fff}.tab.on svg{color:var(--ac)}
-.seg{display:flex;background:var(--card);border-radius:14px;padding:3px;gap:3px;margin:6px 0 12px}
-.seg button{flex:1;border:0;background:none;color:#fff;font-size:13px;font-weight:600;padding:8px;border-radius:11px}
+.seg{display:flex;background:var(--glass);border:1px solid var(--glassb);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-radius:18px;padding:4px;gap:4px;margin:6px 0 14px}
+.seg button{flex:1;border:0;background:none;color:#fff;font-size:13px;font-weight:650;padding:9px 8px;border-radius:15px}
 .seg button.on{background:#fff;color:#000}
 /* teraz gra */
 .cover{width:100%;aspect-ratio:1;border-radius:22px;background:#ffffff14 center/cover no-repeat;box-shadow:0 20px 50px #0008;margin:6px 0 20px}
@@ -46,15 +58,16 @@ h2{font-size:15px;color:#ffffffb0;margin:22px 4px 8px;font-weight:650}
 .vol svg{width:18px;height:18px;flex:none}
 input[type=range]{flex:1;-webkit-appearance:none;appearance:none;height:5px;border-radius:3px;background:#ffffff26;outline:none}
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:11px;background:#fff;box-shadow:0 2px 6px #0006}
-.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#fff;background:var(--card);border-radius:12px;padding:5px 10px}
-.lyr{margin-top:22px;background:#00000040;border-radius:22px;padding:18px 18px 22px;max-height:46vh;overflow:auto;scroll-behavior:smooth}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#fff;background:var(--glass);border:1px solid var(--glassb);border-radius:12px;padding:5px 11px}
+.lyr{margin-top:22px;background:var(--glass);border:1px solid var(--glassb);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-radius:24px;padding:18px 18px 22px;max-height:46vh;overflow:auto;scroll-behavior:smooth}
 .lyr p{margin:0 0 12px;font-size:20px;font-weight:750;color:#ffffff4d;transition:color .25s}
 .lyr p.on{color:#fff}
 /* listy */
-.search{width:100%;background:var(--card);border:1px solid var(--line);border-radius:16px;color:#fff;font-size:16px;padding:12px 16px;outline:none}
+.search{width:100%;background:var(--glass);border:1px solid var(--glassb);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-radius:16px;color:#fff;font-size:16px;padding:12px 16px;outline:none}
+.search::placeholder{color:#ffffff66}
 .search:focus{border-color:var(--ac)}
-.row{display:flex;align-items:center;gap:12px;padding:8px 4px;border-radius:14px}
-.row:active{background:var(--card)}
+.row{display:flex;align-items:center;gap:12px;padding:8px 8px;border-radius:14px}
+.row:active{background:#ffffff14}
 .art{width:48px;height:48px;border-radius:10px;background:#ffffff14 center/cover no-repeat;flex:none;display:flex;align-items:center;justify-content:center;color:#ffffff70;font-size:18px}
 .art.round{border-radius:24px}
 .x{flex:1;min-width:0}
@@ -64,9 +77,10 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
 .btn{border:0;border-radius:20px;background:var(--ac);color:#000;font-weight:700;font-size:15px;padding:12px 18px}
 .btn.ghost{background:var(--card);color:#fff}
 .btns{display:flex;gap:8px;margin:12px 0}
-.card{background:#00000040;border-radius:20px;padding:16px;margin:10px 0}
+.card{background:var(--glass);border:1px solid var(--glassb);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-radius:22px;padding:16px;margin:10px 0}
+.list{background:var(--glass);border:1px solid var(--glassb);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-radius:22px;padding:6px;margin:10px 0}
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.stat{background:#00000040;border-radius:18px;padding:14px}
+.stat{background:var(--glass);border:1px solid var(--glassb);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-radius:20px;padding:14px}
 .stat b{display:block;font-size:26px}
 .stat span{font-size:12px;color:var(--sub)}
 .rk{display:flex;gap:12px;align-items:center;padding:5px 0}
@@ -76,13 +90,20 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
 .sbar i{display:block;height:100%;border-radius:3px;background:var(--ac)}
 .qr{background:#fff;border-radius:20px;padding:14px;width:240px;margin:12px auto;display:block}
 .empty{color:var(--sub);text-align:center;padding:30px 10px;font-size:14px}
-.back{display:inline-flex;align-items:center;gap:6px;background:var(--card);border:0;color:#fff;border-radius:16px;padding:8px 14px;font-size:14px;margin:4px 0 10px}
+.back{display:inline-flex;align-items:center;gap:6px;background:var(--glass);border:1px solid var(--glassb);color:#fff;border-radius:16px;padding:8px 14px;font-size:14px;margin:4px 0 10px}
+.btn.ghost{background:var(--glass);border:1px solid var(--glassb)}
+/* mini odtwarzacz nad zakładkami (na innych zakładkach) */
+#mini{position:fixed;left:14px;right:14px;bottom:calc(84px + env(safe-area-inset-bottom));max-width:530px;margin:0 auto;display:none;align-items:center;gap:12px;padding:8px 10px 8px 8px;background:rgba(18,18,22,.6);backdrop-filter:blur(30px) saturate(1.4);-webkit-backdrop-filter:blur(30px) saturate(1.4);border:1px solid var(--glassb);border-radius:20px;z-index:5;box-shadow:0 10px 30px #0005}
+#mini .art{width:44px;height:44px}
+#mini button{background:#fff;border:0;width:40px;height:40px;border-radius:20px;display:flex;align-items:center;justify-content:center;flex:none}
+#mini button svg{width:18px;height:18px}
+body.mini main{padding-bottom:calc(176px + env(safe-area-inset-bottom))}
 #toast{position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#fff;color:#000;font-weight:700;border-radius:20px;padding:10px 18px;opacity:0;transition:opacity .25s;pointer-events:none;z-index:9;white-space:nowrap}
 .off{background:#ff453a26;color:#ff8a80;border-radius:14px;padding:10px 14px;font-size:13px;margin:8px 0;display:none}
 </style>
 </head>
 <body>
-<div id="bgc"></div>
+<div id="glass"><i></i><i></i><i></i><i></i></div>
 <main>
   <!-- ======= TERAZ GRA ======= -->
   <section class="page on" id="p-now">
@@ -132,6 +153,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
   <button class="tab" data-p="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>Szukaj</button>
   <button class="tab" data-p="more"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20V12M10 20V4M16 20v-6M22 20H2"/></svg>Więcej</button>
 </nav>
+<div id="mini"><div class="art" id="mcv"></div><div class="x"><div class="t1" id="mtt"></div><div class="t2" id="mta"></div></div><button id="mplay" aria-label="Pauza"><svg viewBox="0 0 24 24" fill="#000" id="miplay"><path d="M7 4l13 8-13 8z"/></svg></button></div>
 <div id="toast"></div>
 <audio id="au" preload="auto" playsinline></audio>
 
@@ -171,7 +193,10 @@ document.querySelectorAll('.tab').forEach(b => b.onclick = () => {
   if (b.dataset.p === 'lib') loadLib();
   if (b.dataset.p === 'more') renderMore();
   if (b.dataset.p === 'search' && !$('sq').value) showSubs();
+  updateMini();
 });
+$('mini').onclick = e => { if (e.target.closest('#mplay')) return; document.querySelector('.tab[data-p=now]').click(); };
+$('mplay').onclick = () => $('bplay').click();
 
 // ---------- tryb: komputer / telefon ----------
 let mode = localStorage.getItem('mode') || 'pc';
@@ -190,7 +215,54 @@ let now = null, nowAt = 0, lastCover = '', lastLyr = '', lyrics = [], volBusy = 
 function setAccent(c) { document.documentElement.style.setProperty('--ac', c || '#ff5ca0'); }
 function setCover(url) {
   $('cv').style.backgroundImage = url ? 'url("' + url + '")' : '';
-  $('bgc').style.backgroundImage = url ? 'url("' + url + '")' : '';
+  $('mcv').style.backgroundImage = url ? 'url("' + url + '")' : '';
+  palette(url);
+}
+// kolory „liquid glass” z okładki (jak na komputerze): kilka najbardziej wyrazistych odcieni
+function palette(url) {
+  const root = document.documentElement.style;
+  const fallback = () => { const a = getComputedStyle(document.documentElement).getPropertyValue('--ac').trim() || '#ff5ca0'; ['--c1', '--c2', '--c3', '--c4'].forEach((v, i) => root.setProperty(v, i % 2 ? '#7a4dff' : a)); };
+  if (!url) return fallback();
+  const img = new Image();
+  img.onload = () => {
+    try {
+      const c = document.createElement('canvas'); c.width = c.height = 24;
+      const x = c.getContext('2d'); x.drawImage(img, 0, 0, 24, 24);
+      const d = x.getImageData(0, 0, 24, 24).data, buckets = {};
+      for (let i = 0; i < d.length; i += 4) {
+        const r = d[i], g = d[i + 1], b = d[i + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+        const sat = mx ? (mx - mn) / mx : 0, lum = mx / 255;
+        if (lum < 0.18) continue;
+        let h = 0; if (mx !== mn) { h = mx === r ? (g - b) / (mx - mn) : mx === g ? 2 + (b - r) / (mx - mn) : 4 + (r - g) / (mx - mn); h = (h * 60 + 360) % 360; }
+        const k = Math.round(h / 30) % 12, w = 0.3 + sat * 2 + lum * 0.5;
+        const B = buckets[k] || (buckets[k] = { w: 0, r: 0, g: 0, b: 0 });
+        B.w += w; B.r += r * w; B.g += g * w; B.b += b * w;
+      }
+      const top = Object.values(buckets).sort((a, b) => b.w - a.w).slice(0, 4).map(B => {
+        // jaśniejsze i nasycone, żeby kolory świeciły jak w Isabelle
+        let r = B.r / B.w, g = B.g / B.w, b = B.b / B.w; const m = Math.max(r, g, b, 1), f = Math.min(1.6, 235 / m);
+        return 'rgb(' + Math.round(r * f) + ',' + Math.round(g * f) + ',' + Math.round(b * f) + ')';
+      });
+      if (!top.length) return fallback();
+      while (top.length < 4) top.push(top[top.length % Math.max(1, top.length)]);
+      ['--c1', '--c2', '--c3', '--c4'].forEach((v, i) => root.setProperty(v, top[i]));
+    } catch (e) { fallback(); }
+  };
+  img.onerror = fallback;
+  img.src = url;
+}
+// mini odtwarzacz na zakładkach innych niż „Teraz”
+function updateMini() {
+  const onNow = document.querySelector('.tab[data-p=now]').classList.contains('on');
+  const has = mode === 'pc' ? !!(now && now.title) : !!cur;
+  const show = !onNow && has;
+  $('mini').style.display = show ? 'flex' : 'none';
+  document.body.classList.toggle('mini', show);
+  if (!show) return;
+  $('mtt').textContent = $('tt').textContent;
+  $('mta').textContent = $('ta').textContent;
+  const playing = mode === 'pc' ? now && now.playing : !au.paused;
+  $('miplay').innerHTML = playing ? '<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>' : '<path d="M7 4l13 8-13 8z"/>';
 }
 async function poll() {
   if (mode !== 'pc') return;
@@ -239,7 +311,7 @@ function tick() {
   }
   requestAnimationFrame(tick);
 }
-function playIcon(playing) { $('iplay').innerHTML = playing ? '<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>' : '<path d="M7 4l13 8-13 8z"/>'; }
+function playIcon(playing) { $('iplay').innerHTML = playing ? '<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>' : '<path d="M7 4l13 8-13 8z"/>'; updateMini(); }
 async function cmd(c, v) {
   try { await api('/api/cmd', 'c=' + c + (v !== undefined ? '&v=' + v : '')); } catch (e) { toast(T('Brak połączenia', 'No connection')); }
   setTimeout(poll, 150);
@@ -324,6 +396,7 @@ function renderLib() {
   shown = q ? lib.filter(t => (t.title + ' ' + t.artist + ' ' + t.album).toLowerCase().includes(q)) : lib;
   $('lcount').textContent = shown.length + ' ' + T('utw.', 'tracks');
   if (!lib.length) { $('llist').innerHTML = '<div class="empty">' + T('Biblioteka jest pusta – dodaj muzykę w Isabelle na komputerze.', 'Your library is empty – add music in Isabelle on your PC.') + '</div>'; return; }
+  $('llist').className = 'list';
   $('llist').innerHTML = shown.slice(0, 200).map((t, i) => '<div class="row" data-i="' + i + '"><div class="art"' + (t.art ? ' style="background-image:url(\'' + U('/api/art', 'id=' + t.id) + '\')"' : '') + '>' + (t.art ? '' : '♪') + '</div><div class="x"><div class="t1">' + esc(t.title) + '</div><div class="t2">' + esc(t.artist) + (t.dur ? ' · ' + fmt(t.dur) : '') + '</div></div></div>').join('')
     + (shown.length > 200 ? '<div class="empty">' + T('Wpisz coś, żeby zobaczyć resztę', 'Type to see the rest') + '</div>' : '');
   $('llist').querySelectorAll('.row').forEach(r => r.onclick = () => playLib(+r.dataset.i));
