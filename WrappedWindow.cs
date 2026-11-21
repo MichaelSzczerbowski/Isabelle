@@ -55,15 +55,19 @@ namespace IslandPlayer
 
             var card = new Border
             {
-                Margin = new Thickness(18), CornerRadius = new CornerRadius(26), ClipToBounds = true,
-                Effect = new DropShadowEffect { BlurRadius = 28, ShadowDepth = 6, Opacity = 0.55, Direction = 270, Color = Colors.Black },
+                Margin = new Thickness(18), CornerRadius = new CornerRadius(26),
+                BorderBrush = Hex("#2EFFFFFF"), BorderThickness = new Thickness(1),
+                Effect = new DropShadowEffect { BlurRadius = 28, ShadowDepth = 6, Opacity = 0.5, Direction = 270, Color = Colors.Black },
             };
             var root = new Grid();
             var glass = new GlassBackground();
             glass.SetColors(App.Island?.CoverImage, accentColor);
             root.Children.Add(glass);
             // zaokrąglone rogi także dla tła
-            root.Loaded += (s, e) => root.Clip = new RectangleGeometry(new Rect(0, 0, root.ActualWidth, root.ActualHeight), 26, 26);
+            // zaokrąglone rogi dla całej zawartości (bez kwadratowych brzegów pod spodem)
+            var clip = new RectangleGeometry { RadiusX = 25, RadiusY = 25 };
+            root.Clip = clip;
+            root.SizeChanged += (s, e) => clip.Rect = new Rect(0, 0, e.NewSize.Width, e.NewSize.Height);
             card.Child = root;
             Content = card;
 
