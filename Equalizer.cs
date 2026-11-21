@@ -120,8 +120,19 @@ namespace IslandPlayer
             Bump();
         }
 
+        /// <summary>„Własne” wraca do zera (wszystkie suwaki na 0 dB).</summary>
+        public static void ResetCustom()
+        {
+            App.Config.EqPreset = "custom";
+            App.Config.EqCustom = new double[10];
+            App.Config.Save();
+            Apply(App.Config.EqCustom);
+        }
+
         public static void SetPreset(string key)
         {
+            // niezapisane „Własne” znika po wybraniu innego ustawienia (żeby zostało - „Zapisz pod nazwą…”)
+            if (PresetKey == "custom" && key != "custom") App.Config.EqCustom = new double[10];
             if (key == "custom")
             {
                 // kafelek „Własne”: ostatnie ustawienie suwaków (pamiętane osobno od gotowców)

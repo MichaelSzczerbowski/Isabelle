@@ -89,9 +89,10 @@ namespace IslandPlayer
                 actions.Children.Clear();
                 if (key == "custom")
                 {
-                    actions.Children.Add(new TextBlock { Text = L.T("Przesuń suwaki po swojemu - zapisują się same.", "Move the sliders - changes are saved automatically."), FontSize = 11.5, Foreground = Hex("#80FFFFFF"), VerticalAlignment = VerticalAlignment.Center });
+                    actions.Children.Add(ResetButton(() => Equalizer.ResetCustom()));
+                    actions.Children.Add(new TextBlock { Text = L.T("Niezapisane znika po wyborze innego", "Unsaved changes vanish when you pick another"), FontSize = 11.5, Foreground = Hex("#80FFFFFF"), VerticalAlignment = VerticalAlignment.Center });
                     actions.Children.Add(Dot());
-                    actions.Children.Add(Link(L.T("Zapisz pod nazwą…", "Save with a name…"), accent, () =>
+                    actions.Children.Add(Link(L.T("Zapisz…", "Save…"), accent, () =>
                     {
                         string n = AskName(L.T("Nazwa ustawienia korektora", "Equalizer preset name"), "", L.T("Zapisz", "Save"));
                         if (!string.IsNullOrWhiteSpace(n)) Equalizer.SaveUserPreset(n);
@@ -180,6 +181,27 @@ namespace IslandPlayer
                 Equalizer.SaveCustom();
             };
             return col;
+        }
+
+        /// <summary>Okrągły przycisk ze strzałką w kółku - zeruje suwaki „Własnego”.</summary>
+        private static Border ResetButton(Action click)
+        {
+            var b = new Border
+            {
+                Width = 24, Height = 24, CornerRadius = new CornerRadius(12), Background = Hex("#1FFFFFFF"), Cursor = Cursors.Hand,
+                Margin = new Thickness(0, 0, 9, 0), VerticalAlignment = VerticalAlignment.Center, ToolTip = L.T("Wyzeruj suwaki", "Reset sliders"),
+                Child = new Path
+                {
+                    Data = Geometry.Parse("M4,12 A8,8 0 1 0 6.4,6.3 M6.4,2 V6.3 H10.7"), Stroke = Brushes.White, StrokeThickness = 2,
+                    Width = 11, Height = 11, Stretch = Stretch.Uniform, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
+                    StrokeLineJoin = PenLineJoin.Round, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+                },
+            };
+            b.MouseEnter += (s, e) => b.Background = Hex("#33FFFFFF");
+            b.MouseLeave += (s, e) => b.Background = Hex("#1FFFFFFF");
+            b.MouseLeftButtonDown += (s, e) => e.Handled = true;
+            b.MouseLeftButtonUp += (s, e) => click();
+            return b;
         }
 
         private static TextBlock Dot() =>
