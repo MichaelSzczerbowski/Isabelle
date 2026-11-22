@@ -479,7 +479,7 @@ function pick(kind, i) {
   else if (kind === 'radio') {
     const s = r.radio[i];
     if (mode === 'pc') api('/api/play', 't=' + s.t).then(() => toast(T('Radio gra na komputerze', 'Radio playing on PC')));
-    else playOnPhone({ title: s.title, artist: s.sub, src: s.url, art: s.art || '', live: true });
+    else playOnPhone({ title: s.title, artist: s.sub, src: radioSrc(s), art: s.art || '', live: true });
   } else if (kind === 'pod') { openShow(r.pods[i].t); return; }
   if (kind !== 'pod') { setTimeout(poll, 400); document.querySelector('.tab[data-p=now]').click(); }
 }
@@ -562,7 +562,7 @@ async function showRadio() {
 }
 function playRadio(s) {
   if (mode === 'pc') api('/api/play', 't=' + s.t).then(() => { toast(T('Radio gra na komputerze', 'Radio playing on PC')); setTimeout(poll, 500); });
-  else playOnPhone({ title: s.title, artist: s.sub, src: s.url, art: s.art || '', live: true });
+  else playOnPhone({ title: s.title, artist: s.sub, src: radioSrc(s), art: s.art || '', live: true });
   document.querySelector('.tab[data-p=now]').click();
 }
 async function loadPods() {
@@ -612,13 +612,52 @@ async function renderMore() {
     } catch (e) { v.innerHTML = '<div class="empty">' + T('Brak połączenia z komputerem', "Can't reach your PC") + '</div>'; }
   } else {
     const standalone = window.navigator.standalone || matchMedia('(display-mode: standalone)').matches;
-    v.innerHTML = '<div class="card"><div class="t1" style="font-size:18px">Isabelle</div><div class="sub" style="margin-top:6px">'
+    v.innerHTML = secureCard() + '<div class="card"><div class="t1" style="font-size:18px">Isabelle</div><div class="sub" style="margin-top:6px">'
       + (standalone ? T('Aplikacja jest na ekranie głównym 👌', 'The app is on your home screen 👌')
         : isIOS ? T('Dodaj do ekranu: w Safari dotknij „Udostępnij” (kwadrat ze strzałką) → „Do ekranu początkowego”.', 'Add to home screen: in Safari tap Share → “Add to Home Screen”.')
           : T('Dodaj do ekranu: w Chrome dotknij ⋮ → „Dodaj do ekranu głównego”.', 'Add to home screen: in Chrome tap ⋮ → “Add to Home screen”.'))
       + '</div><div class="sub" style="margin-top:10px">' + T('Działa w tym samym Wi-Fi co komputer z włączoną Isabelle. „Gra w telefonie” odtwarza muzykę z komputera na Twoich słuchawkach.', 'Works on the same Wi-Fi as your PC running Isabelle. “Playing on phone” streams music from your PC to your headphones.') + '</div></div>';
   }
+    bindSecure();
 }
+
+// ---------- otwieranie bez komputera: wersja https (własny certyfikat Isabelle) ----------
+const SECURE = location.protocol === 'https:';
+if (SECURE && 'serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => { });
+function secureCard() {
+  const standalone = window.navigator.standalone || matchMedia('(display-mode: standalone)').matches;
+  if (SECURE) return '<div class="card"><div class="t1" style="font-size:18px">✓ ' + T('Działa bez komputera', 'Works without your PC') + '</div><div class="sub" style="margin-top:6px">'
+    + T('Ta wersja otwiera się także przy wyłączonym komputerze – grają wtedy pobrane utwory i Spotify.', 'This version opens even when your PC is off – downloaded songs and Spotify keep playing.')
+    + (standalone ? '' : '<br><br>' + T('Dodaj tę stronę do ekranu głównego, a starą ikonę Isabelle usuń.', 'Add this page to your home screen and remove the old Isabelle icon.')) + '</div></div>';
+  const ios = isIOS;
+  return '<div class="card"><div class="t1" style="font-size:18px">' + T('Otwieraj bez komputera', 'Open without your PC') + '</div>'
+    + '<div class="sub" style="margin-top:6px">' + T('Raz zainstaluj certyfikat Isabelle – wtedy aplikacja otworzy się nawet przy wyłączonym komputerze. Certyfikat działa tylko dla adresów w Twojej domowej sieci.', 'Install the Isabelle certificate once – then the app opens even when your PC is off. It only works for addresses in your home network.') + '</div>'
+    + '<ol class="sub" style="margin:10px 0 0;padding-left:20px;line-height:1.6">'
+    + '<li>' + T('Pobierz certyfikat:', 'Download the certificate:') + ' <a href="/isabelle.cer" style="color:#fff;font-weight:700">Isabelle.cer</a></li>'
+    + (ios ? '<li>' + T('Ustawienia → „Pobrano profil” → Zainstaluj.', 'Settings → “Profile Downloaded” → Install.') + '</li><li>' + T('Ustawienia → Ogólne → To urządzenie → Ustawienia zaufania certyfikatów → włącz „Isabelle”.', 'Settings → General → About → Certificate Trust Settings → turn on “Isabelle”.') + '</li>'
+      : '<li>' + T('Ustawienia → Bezpieczeństwo → Szyfrowanie i dane logowania → Zainstaluj certyfikat → Certyfikat CA.', 'Settings → Security → Encryption & credentials → Install a certificate → CA certificate.') + '</li>')
+    + '<li>' + T('Dotknij przycisku poniżej i dodaj nową stronę do ekranu głównego (starą ikonę usuń).', 'Tap the button below and add the new page to your home screen (remove the old icon).') + '</li></ol>'
+    + '<div class="btns"><button class="btn" id="gosec">' + T('Otwórz wersję bez komputera', 'Open the PC-free version') + '</button></div><div class="sub" id="secmsg"></div></div>';
+}
+function bindSecure() {
+  const b = $('gosec'); if (!b) return;
+  b.onclick = async () => {
+    $('secmsg').textContent = T('Sprawdzam certyfikat…', 'Checking the certificate…');
+    try {
+      const u = await api('/api/secure');
+      for (const url of [u.host, u.ip]) {
+        try {
+          const c = new AbortController(), tm = setTimeout(() => c.abort(), 3500);
+          const r = await fetch(new URL(url).origin + '/api/ping', { mode: 'cors', signal: c.signal }); clearTimeout(tm);
+          if (r.ok) { location.href = url; return; }
+        } catch (e) { }
+      }
+      $('secmsg').textContent = T('Certyfikat jeszcze nie działa – sprawdź kroki 2 i 3 (zaufanie trzeba włączyć ręcznie).', "The certificate isn't working yet – check steps 2 and 3 (trust has to be turned on manually).");
+    } catch (e) { $('secmsg').textContent = T('Brak połączenia z komputerem', "Can't reach your PC"); }
+  };
+}
+// radio ze zwykłego http nie zagra na stronie https - wtedy idzie przez komputer
+const radioSrc = s => SECURE && /^http:/i.test(s.url || '') ? U('/api/radioproxy', 't=' + s.t) : s.url;
 
 // ---------- Spotify prosto z telefonu (Premium): działa też poza domem, na danych komórkowych ----------
 // Komputer daje telefonowi kopię klucza; telefon sam go odświeża i oddaje nowy po powrocie do Wi-Fi.
@@ -736,7 +775,7 @@ async function searchDirect(q) {
 
 // ---------- muzyka offline: cała biblioteka pobiera się sama do pamięci telefonu ----------
 // (IndexedDB działa też przez zwykłe http w domowym Wi-Fi; gra, dopóki aplikacja jest otwarta)
-let have = new Set(), pcDown = false, libOffline = false, syncing = false, dlNow = '', downFails = 0;
+let everUp = false, have = new Set(), pcDown = false, libOffline = false, syncing = false, dlNow = '', downFails = 0;
 const dbP = new Promise(res => {
   try {
     const r = indexedDB.open('isabelle', 2);
@@ -819,10 +858,10 @@ async function heartbeat() {
   let ok = false;
   try { const c = new AbortController(), tm = setTimeout(() => c.abort(), 4000); const r = await fetch(U('/api/now'), { signal: c.signal }); clearTimeout(tm); ok = r.ok; } catch (e) { }
   if (ok) {
-    downFails = 0;
+    downFails = 0; everUp = true;
     if (pcDown) { pcDown = false; $('offline').style.display = 'none'; if (libOffline) { libOffline = false; lib = null; loadLib(); } }
     syncDownloads(); spSync();
-  } else if (++downFails >= 2 && !pcDown) {
+  } else if (++downFails >= (everUp ? 2 : 1) && !pcDown) {
     pcDown = true;
     if (mode === 'pc' && have.size) { setMode('phone'); toast(T('Brak połączenia z komputerem – grasz muzykę z telefonu', 'No connection to your PC – playing music from your phone')); }
     if (lib && !libOffline) offlineLib();

@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
+using System.Net.Security;
 using System.Net.Sockets;
 using System.Reflection;
 using System.Text;
@@ -21,7 +23,9 @@ namespace IslandPlayer
     public static class CompanionServer
     {
         public const int Port = 43823;
-        private static TcpListener _listener;
+        /// <summary>Wersja https (z własnym certyfikatem) - tylko ją telefon może otwierać przy wyłączonym komputerze.</summary>
+        public const int SecurePort = 43824;
+        private static TcpListener _listener, _secure;
         private static CancellationTokenSource _cts;
         private static string _page;
         private static byte[] _icon;
@@ -44,6 +48,8 @@ namespace IslandPlayer
         }
 
         public static string Url => "http://" + PartyServer.LocalIp() + ":" + Port + "/?k=" + Key;
+        public static string SecureUrlIp => "https://" + PartyServer.LocalIp() + ":" + SecurePort + "/?k=" + Key;
+        public static string SecureUrlHost => "https://" + CompanionCert.HostName + ":" + SecurePort + "/?k=" + Key;
 
         /// <summary>Nowy klucz = stare telefony tracą dostęp (trzeba zeskanować kod jeszcze raz).</summary>
         public static void ResetKey()
@@ -62,7 +68,16 @@ namespace IslandPlayer
                 _listener.Start();
                 _cts = new CancellationTokenSource();
                 var tok = _cts.Token;
-                Task.Run(() => AcceptLoop(tok));
+                Task.Run(() => AcceptLoop(_listener, false, tok));
+                try
+                {
+                    _secure = new TcpListener(IPAddress.Any, SecurePort);
+                    _secure.Start();
+                    var sec = _secure;
+                    // certyfikat przygotowujemy w tle (pierwsze tworzenie klucza trwa chwilę)
+                    Task.Run(() => { try { CompanionCert.Server(); } catch (Exception ex) { Log.Info("telefon cert: " + ex.Message); } AcceptLoop(sec, true, tok); });
+                }
+                catch (Exception ex) { _secure = null; Log.Info("telefon https: " + ex.Message); }
                 Error = null;
                 StateChanged?.Invoke();
                 return true;
@@ -80,30 +95,39 @@ namespace IslandPlayer
         {
             try { _cts?.Cancel(); } catch { }
             try { _listener?.Stop(); } catch { }
-            _listener = null;
+            try { _secure?.Stop(); } catch { }
+            _listener = null; _secure = null;
             StateChanged?.Invoke();
         }
 
-        private static async Task AcceptLoop(CancellationToken tok)
+        private static async Task AcceptLoop(TcpListener listener, bool secure, CancellationToken tok)
         {
             while (!tok.IsCancellationRequested)
             {
                 TcpClient client;
-                try { client = await _listener.AcceptTcpClientAsync(tok); }
+                try { client = await listener.AcceptTcpClientAsync(tok); }
                 catch { break; }
-                _ = Task.Run(() => Handle(client));
+                _ = Task.Run(() => Handle(client, secure));
             }
         }
 
         // ================= HTTP =================
-        private static async Task Handle(TcpClient client)
+        private static async Task Handle(TcpClient client, bool secure)
         {
             using (client)
             {
+                SslStream ssl = null;
                 try
                 {
                     client.SendTimeout = 15000;
-                    var stream = client.GetStream();
+                    Stream stream = client.GetStream();
+                    if (secure)
+                    {
+                        ssl = new SslStream(stream, false);
+                        using (var hs = new CancellationTokenSource(10000))
+                            await ssl.AuthenticateAsServerAsync(new SslServerAuthenticationOptions { ServerCertificate = CompanionCert.Server() }, hs.Token);
+                        stream = ssl;
+                    }
                     var buf = new byte[16384];
                     int n = await stream.ReadAsync(buf, 0, buf.Length);
                     if (n <= 0) return;
@@ -115,6 +139,11 @@ namespace IslandPlayer
                     string range = req.Split('\n').Select(l => l.Trim()).FirstOrDefault(l => l.StartsWith("Range:", StringComparison.OrdinalIgnoreCase));
 
                     // pliki aplikacji bez klucza (ikona i manifest muszą się wczytać przy dodawaniu do ekranu)
+                    if (path == "/sw.js") { await Send(stream, "200 OK", "text/javascript; charset=utf-8", Encoding.UTF8.GetBytes(ServiceWorker), "no-cache"); return; }
+                    // certyfikat do zainstalowania w telefonie (część publiczna - bez klucza)
+                    if (path == "/isabelle.cer") { await SendFile(stream, "application/x-x509-ca-cert", CompanionCert.CaDer(), "Isabelle.cer"); return; }
+                    // strona https sprawdza z wersji http, czy certyfikat już działa (CORS)
+                    if (path == "/api/ping") { await Send(stream, "200 OK", "application/json", Encoding.UTF8.GetBytes(secure ? "{\"ok\":true}" : "{\"ok\":false}"), "no-store", true); return; }
                     if (path == "/icon.png") { await Send(stream, "200 OK", "image/png", Icon(), "public, max-age=86400"); return; }
                     if (path == "/manifest.json") { await Send(stream, "200 OK", "application/manifest+json", Encoding.UTF8.GetBytes(Manifest(q.TryGetValue("k", out var mk) ? mk : ""))); return; }
 
@@ -152,6 +181,10 @@ namespace IslandPlayer
                                 await Json(stream, took ? "{\"ok\":true}" : "{\"ok\":false}");
                                 break;
                             }
+                        case "/api/secure":
+                            await Json(stream, Serialize(new { host = SecureUrlHost, ip = SecureUrlIp, secure }));
+                            break;
+                        case "/api/radioproxy": await RadioProxy(stream, q); break;
                         case "/api/radio": await Json(stream, await RadioJson(q)); break;
                         case "/api/radiofav": await Json(stream, await Ui(() => RadioFav(q))); break;
                         case "/api/podtop": await Json(stream, await PodTopJson()); break;
@@ -165,7 +198,8 @@ namespace IslandPlayer
                         default: await Send(stream, "404 Not Found", "text/plain", Array.Empty<byte>()); break;
                     }
                 }
-                catch (Exception ex) { Log.Info("telefon: " + ex.Message); }
+                catch (Exception ex) { if (!(ex is IOException) && !(ex is OperationCanceledException)) Log.Info("telefon: " + ex.Message); }
+                finally { ssl?.Dispose(); }
             }
         }
 
@@ -246,7 +280,7 @@ namespace IslandPlayer
             return LibraryService.Tracks.ToList().FirstOrDefault(t => string.Equals(t.Path, path, StringComparison.OrdinalIgnoreCase));
         }
 
-        private static async Task Art(NetworkStream s, Dictionary<string, string> q)
+        private static async Task Art(Stream s, Dictionary<string, string> q)
         {
             var t = TrackById(q.TryGetValue("id", out var id) ? id : "");
             // okładka jeszcze nieszukana (utwór nie był grany na komputerze) - poszukaj teraz, jak robi to odtwarzacz
@@ -258,7 +292,7 @@ namespace IslandPlayer
         }
 
         /// <summary>Plik z biblioteki dla odtwarzacza w telefonie (z obsługą przewijania - Range).</summary>
-        private static async Task StreamFile(NetworkStream s, Dictionary<string, string> q, string rangeHeader)
+        private static async Task StreamFile(Stream s, Dictionary<string, string> q, string rangeHeader)
         {
             var t = TrackById(q.TryGetValue("id", out var id) ? id : "");
             if (t == null || !File.Exists(t.Path)) { await Send(s, "404 Not Found", "text/plain", Array.Empty<byte>()); return; }
@@ -455,16 +489,71 @@ namespace IslandPlayer
 
         private static string Serialize(object o) => JsonSerializer.Serialize(o);
 
-        private static Task Json(NetworkStream s, string json) => Send(s, "200 OK", "application/json; charset=utf-8", Encoding.UTF8.GetBytes(json));
+        private static Task Json(Stream s, string json) => Send(s, "200 OK", "application/json; charset=utf-8", Encoding.UTF8.GetBytes(json));
 
-        private static async Task Send(NetworkStream s, string status, string type, byte[] body, string cache = "no-store")
+        private static async Task Send(Stream s, string status, string type, byte[] body, string cache = "no-store", bool cors = false)
         {
             string head = "HTTP/1.1 " + status + "\r\nContent-Type: " + type + "\r\nContent-Length: " + body.Length +
-                          "\r\nCache-Control: " + cache + "\r\nConnection: close\r\n\r\n";
+                          "\r\nCache-Control: " + cache + (cors ? "\r\nAccess-Control-Allow-Origin: *" : "") + "\r\nConnection: close\r\n\r\n";
             var h = Encoding.ASCII.GetBytes(head);
             await s.WriteAsync(h, 0, h.Length);
             if (body.Length > 0) await s.WriteAsync(body, 0, body.Length);
         }
+
+        private static async Task SendFile(Stream s, string type, byte[] body, string fileName)
+        {
+            string head = "HTTP/1.1 200 OK\r\nContent-Type: " + type + "\r\nContent-Length: " + body.Length +
+                          "\r\nContent-Disposition: attachment; filename=\"" + fileName + "\"\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n";
+            var h = Encoding.ASCII.GetBytes(head);
+            await s.WriteAsync(h, 0, h.Length);
+            await s.WriteAsync(body, 0, body.Length);
+        }
+
+        private static readonly HttpClient ProxyHttp = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true }) { Timeout = Timeout.InfiniteTimeSpan };
+
+        /// <summary>Radio przez komputer: strona https w telefonie nie może grać stacji ze zwykłego http.</summary>
+        private static async Task RadioProxy(Stream s, Dictionary<string, string> q)
+        {
+            if (!(Resolve(q.TryGetValue("t", out var t) ? t : null) is RadioStation st) || string.IsNullOrEmpty(st.Url))
+            { await Send(s, "404 Not Found", "text/plain", Array.Empty<byte>()); return; }
+            using var req = new HttpRequestMessage(HttpMethod.Get, st.Url);
+            req.Headers.UserAgent.ParseAdd("Isabelle/1.0");
+            using var res = await ProxyHttp.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
+            if (!res.IsSuccessStatusCode) { await Send(s, "502 Bad Gateway", "text/plain", Array.Empty<byte>()); return; }
+            string type = res.Content.Headers.ContentType?.ToString() ?? "audio/mpeg";
+            var h = Encoding.ASCII.GetBytes("HTTP/1.1 200 OK\r\nContent-Type: " + type + "\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n");
+            await s.WriteAsync(h, 0, h.Length);
+            using var src = await res.Content.ReadAsStreamAsync();
+            var buf = new byte[16384];
+            int n;
+            // gra, dopóki telefon słucha (zerwane połączenie kończy kopiowanie wyjątkiem)
+            while ((n = await src.ReadAsync(buf, 0, buf.Length)) > 0) await s.WriteAsync(buf, 0, n);
+        }
+
+        /// <summary>Service worker: zapisuje aplikację w telefonie, żeby otwierała się też przy wyłączonym komputerze.</summary>
+        private const string ServiceWorker = @"
+const C = 'isabelle-app-v1';
+self.addEventListener('install', e => self.skipWaiting());
+self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
+self.addEventListener('fetch', e => {
+  const u = new URL(e.request.url);
+  if (e.request.method !== 'GET' || u.origin !== location.origin) return;
+  const shell = e.request.mode === 'navigate' || u.pathname === '/' || u.pathname === '/manifest.json' || u.pathname === '/icon.png';
+  if (!shell) return;   // dane z komputera (api) zawsze na żywo
+  e.respondWith((async () => {
+    const cache = await caches.open(C);
+    try {
+      const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 3500);
+      const r = await fetch(e.request, { signal: ctl.signal });
+      clearTimeout(tm);
+      if (r.ok) cache.put(u.pathname === '/' ? '/' : e.request, r.clone());
+      return r;
+    } catch (err) {
+      const hit = await cache.match(u.pathname === '/' ? '/' : e.request, { ignoreSearch: true });
+      return hit || new Response('Isabelle: brak połączenia z komputerem', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+    }
+  })());
+});";
 
         private static Dictionary<string, string> Query(string target)
         {
